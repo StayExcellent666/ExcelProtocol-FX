@@ -1,0 +1,14 @@
+{
+  "name": "excelprotocol-fx",
+  "displayName": "ExcelProtocol FX",
+  "version": "1.0.0",
+  "author": "ExcelProtocol contributors",
+  "website": "https://github.com/StayExcellent666/ExcelProtocol-FX",
+  "email": "",
+  "platformConfig": {"macos": {"bundleId": "com.excelprotocol.fx"}},
+  "template": {"repository": "obsproject/obs-plugintemplate", "commit": "3e7d7ac3b5342cd7d9b88890b9c70b472d1520fc"},
+  "dependencies": {
+    "obs-studio": {"version": "32.2.2", "commit": "ba2f32bdf791005443988a4955e963663e16b1ed"},
+    "qt6": {"version": "6.11.1", "build": "2026-07-15", "sha256": "7c7f985711d80467bdc1795b6592275a27d5b0e5a2c7a61db1f2c1d08d6a5579"}
+  }
+}

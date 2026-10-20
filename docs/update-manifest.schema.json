@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExcelProtocol FX GitHub release update manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "version", "tag", "channel", "repository", "published_at", "release_url", "commit", "platform", "obs", "assets"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-beta\\.[1-9][0-9]*)?$"},
+    "tag": {"type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+(-beta\\.[1-9][0-9]*)?$"},
+    "channel": {"enum": ["stable", "beta"]},
+    "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/ExcelProtocol-FX$"},
+    "published_at": {"type": "string", "format": "date-time"},
+    "release_url": {"type": "string", "format": "uri", "pattern": "^https://github\\.com/"},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "platform": {"const": "windows-x64"},
+    "obs": {
+      "type": "object", "additionalProperties": false,
+      "required": ["minimum", "maximum_exclusive"],
+      "properties": {"minimum": {"const": "32.2.2"}, "maximum_exclusive": {"const": "33.0.0"}}
+    },
+    "assets": {
+      "type": "object", "additionalProperties": false,
+      "required": ["installer", "portable"],
+      "properties": {"installer": {"$ref": "#/$defs/asset"}, "portable": {"$ref": "#/$defs/asset"}}
+    }
+  },
+  "$defs": {
+    "asset": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "url", "sha256", "size"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^ExcelProtocol-FX-[0-9].*-windows-x64-(setup\\.exe|portable\\.zip)$"},
+        "url": {"type": "string", "format": "uri", "pattern": "^https://github\\.com/"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "size": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

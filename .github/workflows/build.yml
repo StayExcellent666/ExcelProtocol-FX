@@ -1,0 +1,74 @@
+name: Windows x64 build and test
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Numeric version, optionally with -beta.N
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      FX_VERSION: ${{ inputs.version }}
+      FX_REPOSITORY: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: x64
+      - name: Validate release code and metadata
+        run: |
+          python scripts/release_tools.py version --version "$env:FX_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid version' }
+          python -m unittest discover -s tests -p 'test_*.py' -v
+          if ($LASTEXITCODE -ne 0) { throw 'Python tests failed' }
+      - name: Prepare pinned official OBS and Qt dependencies
+        run: ./scripts/prepare-deps.ps1
+      - name: Configure and compile
+        run: |
+          cmake --preset windows-x64 "-DFX_GITHUB_REPOSITORY=$env:FX_REPOSITORY" "-DFX_VERSION=$env:FX_VERSION"
+          if ($LASTEXITCODE -ne 0) { throw 'CMake configuration failed' }
+          cmake --build --preset windows-x64
+          if ($LASTEXITCODE -ne 0) { throw 'Native build failed' }
+          ctest --test-dir build_x64 -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw 'Native tests failed' }
+          cmake --install build_x64 --prefix stage --config Release
+          if ($LASTEXITCODE -ne 0) { throw 'Staging failed' }
+      - name: Package installer, portable ZIP, and verified metadata
+        run: |
+          ./scripts/package-release.ps1 -Version $env:FX_VERSION -Repository $env:FX_REPOSITORY -Commit (git rev-parse HEAD)
+      - name: Verify installer integration
+        run: ./scripts/test-installer.ps1 -Installer "dist/ExcelProtocol-FX-$env:FX_VERSION-windows-x64-setup.exe"
+      - name: Verify plugin loads in the supported OBS runtime
+        run: ./scripts/test-obs-load.ps1
+      - name: Upload tested distribution
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-x64-release
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-x64-test-logs
+          path: |
+            build_x64/Testing/Temporary/*.log
+            build-installer-smoke/*.log
+            build-obs-smoke/**/*.log
+          if-no-files-found: ignore
+          retention-days: 14

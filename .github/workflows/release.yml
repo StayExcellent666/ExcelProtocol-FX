@@ -1,0 +1,101 @@
+name: Publish tested Windows release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and publish (vX.Y.Z or vX.Y.Z-beta.N)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      channel: ${{ steps.version.outputs.channel }}
+      tag: ${{ steps.version.outputs.tag }}
+      commit: ${{ steps.version.outputs.commit }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate exact tag, version, and stable QA evidence
+        id: version
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        shell: python
+        run: |
+          import os, subprocess, sys
+          from pathlib import Path
+          sys.path.insert(0, 'scripts')
+          from release_tools import version_info, validate_qa
+          tag = os.environ['RELEASE_TAG']
+          if not tag.startswith('v'):
+              raise SystemExit('Release tags must begin with v')
+          version, channel = version_info(tag)
+          declared = Path('VERSION.txt').read_text().strip()
+          if version.split('-beta.')[0] != declared:
+              raise SystemExit('Tag base version does not match VERSION.txt')
+          commit = subprocess.check_output(['git', 'rev-parse', f'refs/tags/{tag}^{{commit}}'], text=True).strip()
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if head != commit:
+              raise SystemExit('Build checkout does not match tag')
+          validate_qa(Path(f'docs/qa/v{version}.json'), version, Path.cwd())
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'version={version}\nchannel={channel}\ntag={tag}\ncommit={commit}\n')
+  build:
+    needs: metadata
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.metadata.outputs.version }}
+  publish:
+    needs: [metadata, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.metadata.outputs.commit }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: windows-x64-release
+          path: dist
+      - name: Recheck published assets and generate release notes
+        env:
+          RELEASE_VERSION: ${{ needs.metadata.outputs.version }}
+          RELEASE_COMMIT: ${{ needs.metadata.outputs.commit }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: |
+          python scripts/release_tools.py verify --output dist --version "$RELEASE_VERSION" --repository "$RELEASE_REPOSITORY" --commit "$RELEASE_COMMIT"
+          python scripts/release-notes.py --version "$RELEASE_VERSION" --commit "$RELEASE_COMMIT" --output dist/RELEASE-NOTES.md
+      - name: Upload every asset before making the release public
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.metadata.outputs.tag }}
+          RELEASE_CHANNEL: ${{ needs.metadata.outputs.channel }}
+        run: |
+          set -euo pipefail
+          args=(release create "$RELEASE_TAG" dist/* --verify-tag --draft --title "ExcelProtocol FX $RELEASE_TAG" --notes-file dist/RELEASE-NOTES.md)
+          if [ "$RELEASE_CHANNEL" = beta ]; then args+=(--prerelease); fi
+          gh "${args[@]}"
+          # A failed asset upload leaves only a draft. Never overwrite an existing release.
+          if [ "$RELEASE_CHANNEL" = stable ]; then
+            gh release edit "$RELEASE_TAG" --draft=false --latest
+          else
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease --latest=false
+          fi

@@ -1,0 +1,12 @@
+.deps/
+build*/
+stage/
+dist/
+test-output/
+*.user
+CMakeUserPresets.json
+cmake/.CMakeBuildNumber
+__pycache__/
+*.pyc
+*.log
+.vs/

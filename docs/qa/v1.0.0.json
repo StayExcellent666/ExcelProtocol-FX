@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "approved": false,
+  "tester": "",
+  "tested_commit": "",
+  "tested_at": "",
+  "obs_version": "32.2.2",
+  "windows_version": "",
+  "checks": {
+    "native_plugin_load": {"result": "not_run", "evidence": ""},
+    "desktop_and_obs_effects": {"result": "not_run", "evidence": ""},
+    "settings_persistence": {"result": "not_run", "evidence": ""},
+    "websocket_authentication": {"result": "not_run", "evidence": ""},
+    "installer_clean_install": {"result": "not_run", "evidence": ""},
+    "installer_upgrade_rollback": {"result": "not_run", "evidence": ""},
+    "installer_obs_running_refusal": {"result": "not_run", "evidence": ""},
+    "uninstall_preserves_obs": {"result": "not_run", "evidence": ""},
+    "stable_beta_update_selection": {"result": "not_run", "evidence": ""},
+    "update_digest_rejection": {"result": "not_run", "evidence": ""},
+    "update_after_obs_exit": {"result": "not_run", "evidence": ""},
+    "performance_and_panic_stop": {"result": "not_run", "evidence": ""}
+  }
+}
