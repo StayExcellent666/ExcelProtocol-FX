@@ -2,6 +2,7 @@
 #include <QApplication>
 #include <QCryptographicHash>
 #include <QFile>
+#include <QJsonArray>
 #include <QThread>
 #include <iostream>
 #include <limits>
@@ -63,6 +64,12 @@ int main(int argc, char **argv)
         QThread::msleep(550); QCoreApplication::processEvents();
         check(manager.active().empty(), "expired effect automatically removed");
         check(manager.command({{"type", "trigger_effect"}, {"event_id", "bad-2"}, {"effect", "fog"}, {"duration_ms", 1.5}}).value("status") == "invalid_duration", "fractional durations rejected");
+        const auto catalog = manager.command({{"type", "list_effects"}}).value("effects").toArray();
+        check(catalog.size() == manager.definitions().size(), "effect catalog reports every effect");
+        check(catalog.at(0).toObject().contains("default_duration_ms"), "effect catalog reports default duration");
+        const auto inkMetadata = catalog.at(1).toObject().value("parameters").toObject();
+        check(inkMetadata.value("splatters").toObject().value("max").toInt() == 12, "effect catalog reports parameter limits");
+        check(inkMetadata.value("drips").toObject().value("type") == "boolean", "effect catalog reports parameter types");
         manager.shutdown();
         check(manager.trigger("fog") == "disabled", "shutdown blocks activation");
     }

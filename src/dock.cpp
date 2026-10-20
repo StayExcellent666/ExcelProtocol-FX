@@ -1,5 +1,6 @@
 #include "dock.hpp"
 #include "effects.hpp"
+#include "remote-client.hpp"
 #include "update-controller.hpp"
 
 #include <obs-module.h>
@@ -10,9 +11,11 @@
 #include <QFormLayout>
 #include <QGuiApplication>
 #include <QGroupBox>
+#include <QHostInfo>
 #include <QHBoxLayout>
 #include <QJsonDocument>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScreen>
@@ -44,6 +47,7 @@ QWidget *scrollable(QWidget *widget)
 
 FxDock::FxDock(EffectManager &manager, QWidget *parent) : QWidget(parent), manager_(manager)
 {
+    remote_ = new RemoteClient(manager_, this);
     setMinimumSize(360, 340);
     setStyleSheet("QGroupBox { border: 1px solid #3c4a55; border-radius: 6px; margin-top: 14px; padding-top: 12px; }"
                   "QGroupBox::title { color: #42dfec; subcontrol-origin: margin; left: 10px; }"
@@ -72,8 +76,14 @@ FxDock::FxDock(EffectManager &manager, QWidget *parent) : QWidget(parent), manag
     QObject::connect(qApp, &QGuiApplication::screenAdded, this, [this] { refreshMonitors(); });
     QObject::connect(qApp, &QGuiApplication::screenRemoved, this, [this] { refreshMonitors(); });
     QObject::connect(tabs, &QTabWidget::currentChanged, this, [this] { refresh(); });
+    remote_->onChanged = [this] { refreshConnection(); };
+    remote_->onPairingFinished = [this](bool success, const QString &) {
+        if (success && pairingCode_) pairingCode_->clear();
+        refreshConnection();
+    };
     refresh();
     updates_->start();
+    remote_->start();
 }
 
 FxDock::~FxDock() { shutdown(); }
@@ -82,6 +92,7 @@ void FxDock::shutdown()
     if (stopped_) return;
     stopped_ = true;
     manager_.onChanged = {}; manager_.onResult = {};
+    if (remote_) { remote_->onChanged = {}; remote_->onPairingFinished = {}; remote_->shutdown(); }
     if (updates_) updates_->shutdown();
 }
 
@@ -106,7 +117,7 @@ QWidget *FxDock::dashboard()
     QObject::connect(maximum, &QSpinBox::valueChanged, this, [this](int value) { manager_.setMaxSimultaneous(value); });
     form->addRow("Maximum simultaneous", maximum);
     layout->addLayout(form);
-    layout->addWidget(note("Audio is not included in v1.0.0. All effects are visual and silent."));
+    layout->addWidget(note("All ExcelProtocol FX effects are visual and silent."));
     layout->addStretch(); return widget;
 }
 
@@ -254,8 +265,37 @@ QWidget *FxDock::display()
 QWidget *FxDock::integration()
 {
     auto *widget = new QWidget; auto *layout = new QVBoxLayout(widget);
-    layout->addWidget(note("Local command tester\nPaste an ExcelProtocol command to validate it and trigger the same effect engine used by the dock. No network listener is opened."));
-    layout->addWidget(note("Remote TLS WebSocket transport and OBS WebSocket vendor registration are not included in v1.0.0. The command API is ready for a future authenticated transport; your existing bot is unchanged."));
+    auto *remoteGroup = new QGroupBox("ExcelProtocol dashboard connection");
+    auto *remoteForm = new QFormLayout(remoteGroup);
+    connectionLabel_ = note("Not paired");
+    deviceLabel_ = note("Device: none");
+    remoteForm->addRow("Status", connectionLabel_);
+    remoteForm->addRow("Device", deviceLabel_);
+    pairingCode_ = new QLineEdit;
+    pairingCode_->setPlaceholderText("XXXX-XXXX");
+    pairingCode_->setMaxLength(16);
+    pairingCode_->setInputMethodHints(Qt::ImhUppercaseOnly | Qt::ImhPreferLatin);
+    remoteForm->addRow("Pairing code", pairingCode_);
+    deviceName_ = new QLineEdit(QString("OBS on %1").arg(QHostInfo::localHostName()).left(64));
+    deviceName_->setMaxLength(64);
+    remoteForm->addRow("Device name", deviceName_);
+    auto *pairRow = new QWidget; auto *pairLayout = new QHBoxLayout(pairRow);
+    pairLayout->setContentsMargins(0, 0, 0, 0);
+    pairButton_ = new QPushButton("Pair device");
+    reconnectButton_ = new QPushButton("Reconnect");
+    forgetButton_ = new QPushButton("Forget locally");
+    pairLayout->addWidget(pairButton_); pairLayout->addWidget(reconnectButton_); pairLayout->addWidget(forgetButton_);
+    remoteForm->addRow(pairRow);
+    remoteForm->addRow(note("Create a one-time pairing code in Dashboard > Channel Rewards, paste it here, then leave OBS open. The device credential is kept in Windows Credential Manager. Use Revoke in the dashboard to invalidate a device server-side."));
+    layout->addWidget(remoteGroup);
+    QObject::connect(pairButton_, &QPushButton::clicked, this, [this] {
+        remote_->pair(pairingCode_->text(), deviceName_->text());
+    });
+    QObject::connect(pairingCode_, &QLineEdit::returnPressed, pairButton_, &QPushButton::click);
+    QObject::connect(reconnectButton_, &QPushButton::clicked, this, [this] { remote_->reconnectNow(); });
+    QObject::connect(forgetButton_, &QPushButton::clicked, this, [this] { remote_->forgetDevice(); });
+
+    layout->addWidget(note("Local command tester\nPaste an ExcelProtocol command to validate it and trigger the same effect engine used by the secure reward connection. The plugin opens no listener or inbound port."));
     auto *editor = new QPlainTextEdit;
     editor->setPlainText("{\n  \"type\": \"trigger_effect\",\n  \"event_id\": \"test-001\",\n  \"effect\": \"ink_splatter\",\n  \"duration_ms\": 8000,\n  \"intensity\": 0.7,\n  \"parameters\": {\"splatters\": 5}\n}");
     editor->setMaximumBlockCount(200); layout->addWidget(editor);
@@ -269,7 +309,21 @@ QWidget *FxDock::integration()
         response->setPlainText(QString::fromUtf8(QJsonDocument(manager_.command(json.object())).toJson(QJsonDocument::Indented)));
     });
     layout->addWidget(note("Mutation commands require a unique event_id (up to 128 characters). Duration, intensity, enabled states, cooldowns, duplicate IDs and a 16-entry queue are enforced."));
+    refreshConnection();
     return widget;
+}
+
+void FxDock::refreshConnection()
+{
+    if (!remote_ || !connectionLabel_) return;
+    connectionLabel_->setText(remote_->statusText());
+    deviceLabel_->setText(remote_->deviceId().isEmpty() ? "Device: none" : "Device: " + remote_->deviceId());
+    const bool pairing = remote_->state() == RemoteClient::State::Pairing;
+    pairingCode_->setEnabled(!pairing);
+    deviceName_->setEnabled(!pairing);
+    pairButton_->setEnabled(!pairing);
+    reconnectButton_->setEnabled(remote_->paired() && !pairing);
+    forgetButton_->setEnabled(remote_->paired() && !pairing);
 }
 
 void FxDock::refreshMonitors()

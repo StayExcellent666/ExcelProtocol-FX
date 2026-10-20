@@ -600,7 +600,27 @@ QJsonObject EffectManager::command(const QJsonObject &request)
     }
     if (type == "list_effects") {
         QJsonArray values;
-        for (const auto &def : definitions_) values.push_back(QJsonObject{{"id", def.id}, {"name", def.name}, {"description", def.description}, {"category", def.category}, {"enabled", def.enabled}, {"duration_ms", def.durationMs}, {"min_duration_ms", def.minDurationMs}, {"max_duration_ms", def.maxDurationMs}, {"cooldown_ms", def.cooldownMs}, {"intensity", def.intensity}, {"weight", def.weight}, {"parameters", def.parameters}});
+        for (const auto &def : definitions_) {
+            QJsonObject parameters;
+            if (def.id == "crash") {
+                parameters.insert("style", QJsonObject{{"type", "integer"}, {"label", "Style"},
+                    {"min", 0}, {"max", 2}, {"step", 1}, {"default", def.parameters.value("style")}});
+            } else if (def.id == "ink_splatter") {
+                parameters.insert("splatters", QJsonObject{{"type", "integer"}, {"label", "Splatters"},
+                    {"min", 1}, {"max", 12}, {"step", 1}, {"default", def.parameters.value("splatters")}});
+                parameters.insert("drips", QJsonObject{{"type", "boolean"}, {"label", "Animate drips"},
+                    {"default", def.parameters.value("drips")}});
+                parameters.insert("opacity", QJsonObject{{"type", "number"}, {"label", "Ink opacity"},
+                    {"min", 0.1}, {"max", 1.0}, {"step", 0.05}, {"default", def.parameters.value("opacity")}});
+            }
+            values.push_back(QJsonObject{
+                {"id", def.id}, {"name", def.name}, {"description", def.description}, {"category", def.category},
+                {"enabled", def.enabled}, {"default_duration_ms", def.durationMs},
+                {"min_duration_ms", def.minDurationMs}, {"max_duration_ms", def.maxDurationMs},
+                {"default_cooldown_ms", def.cooldownMs}, {"default_intensity", def.intensity},
+                {"default_random_weight", def.weight}, {"parameters", parameters},
+            });
+        }
         return {{"ok", true}, {"effects", values}};
     }
     if (type == "get_status") return {{"ok", true}, {"enabled", enabled_}, {"active_count", static_cast<int>(active_.size())}, {"queued_count", static_cast<int>(queue_.size())}, {"desktop", desktopEnabled_}, {"stream", streamEnabled_}, {"source_count", frame_->sourceCount.load()}};

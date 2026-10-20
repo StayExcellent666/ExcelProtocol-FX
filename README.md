@@ -2,13 +2,15 @@
 
 ExcelProtocol FX is a native Windows x64 plugin for OBS Studio 32.2.2 through 32.x. It renders the same seeded animation frame in a click-through desktop overlay and in an `ExcelProtocol FX` OBS source, so stream viewers and the streamer see synchronized effects.
 
-The plugin includes ten procedural effects, weighted random and constrained chaos modes, duration/cooldown/intensity limits, a bounded command API, a dock, monitor selection, persistent settings, and clear-all hotkeys. It does not inject into games, manipulate input, modify a game renderer, or claim support over exclusive-fullscreen games. Use borderless or windowed display mode when the desktop overlay must remain visible.
+The plugin includes ten procedural effects, weighted random and constrained chaos modes, duration/cooldown/intensity limits, a bounded command API, a dock, monitor selection, persistent settings, secure ExcelProtocol Channel Reward triggers, and clear-all hotkeys. It does not inject into games, manipulate input, modify a game renderer, or claim support over exclusive-fullscreen games. Use borderless or windowed display mode when the desktop overlay must remain visible.
 
 ## Install
 
 Download the Windows x64 setup executable from the matching GitHub Release and close OBS before running it. Setup locates common OBS installations, validates the selected x64 OBS version, backs up existing plugin-owned files, and refuses installation while any OBS process is open. The portable ZIP has the standard OBS layout and can be extracted into the OBS installation root while OBS is closed.
 
 After installation, open **Docks > ExcelProtocol FX**. Add the `ExcelProtocol FX` source above gameplay in each scene that should show stream effects. The desktop overlay and stream source can be enabled independently. `Ctrl+Shift+F12` clears every effect globally; an OBS hotkey with the same purpose is also available.
+
+To use Channel Reward effects, create a one-time code from **Dashboard > Channel Rewards > ExcelProtocol FX**, then paste it into the plugin's **Connection** tab. The plugin stores its device credential in Windows Credential Manager and makes an outbound authenticated TLS connection; it opens no inbound port. Live effect commands are acknowledged, expire after ten seconds, and are never replayed after a reconnect.
 
 ## Updates
 
@@ -42,6 +44,6 @@ The release workflow uses the repository-scoped `GITHUB_TOKEN` with `contents: w
 
 ## Integration status
 
-The effect manager accepts validated JSON commands for trigger, random, cancel, clear, active-effect, library, and status operations. The dock includes a local JSON command tester. The remotely hosted ExcelProtocol bot endpoint and authentication protocol have not yet been supplied, so v1.0.0 does not claim a tested bot WebSocket connection. A future transport should use outbound authenticated TLS and dispatch into this bounded command API.
+Version 1.1.0 pairs with the ExcelProtocol dashboard over HTTPS and connects to the production bot using an outbound authenticated TLS WebSocket. Remote commands dispatch into the same bounded effect manager used by local previews. The plugin advertises command, effect-library, and status capabilities, answers correlated requests, sends heartbeats, uses progressive full-jitter reconnects, rejects expired or duplicate mutations, and never queues live commands across a disconnect.
 
 Licensed under GPL-2.0-or-later; see [LICENSE](LICENSE).
