@@ -61,7 +61,7 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
 
     if (effect.id == "crash") {
         const int style = std::clamp(effect.parameters.value("style").toInt(0), 0, 2);
-        p.setOpacity(fade * clamp(strength + 0.3, 0, 1));
+        p.setOpacity(fade);
         const QRectF panel = style == 1 ? QRectF(310, 285, 1300, 500) : QRectF(0, 0, 1920, 1080);
         p.fillRect(panel, style == 2 ? QColor(9, 16, 19) : QColor(1, 65, 89));
         const QStringList errors{"SKILL_ISSUE_DETECTED", "AIM_ASSIST_NOT_FOUND", "BRAIN.exe HAS STOPPED WORKING",
@@ -121,9 +121,9 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
                 const double distance = segment * between(random, 50, 95) * (0.4 + strength);
                 const QPointF next = center + QPointF(std::cos(angle) * distance + between(random, -18, 18),
                                                      std::sin(angle) * distance + between(random, -18, 18));
-                p.setPen(QPen(QColor(0, 0, 0, 100), 4));
+                p.setPen(QPen(QColor(0, 0, 0), 4));
                 p.drawLine(previous + QPointF(2, 2), next + QPointF(2, 2));
-                p.setPen(QPen(QColor(211, 245, 255, 220), 1.6));
+                p.setPen(QPen(QColor(211, 245, 255), 1.6));
                 p.drawLine(previous, next);
                 if (segment % 2 == 0) p.drawLine(next, next + QPointF(std::cos(angle + 0.8) * 75, std::sin(angle + 0.8) * 75));
                 previous = next;
@@ -137,7 +137,7 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
             const double x = between(random, 35, 1415), y = between(random, 35, 810);
             if (seconds < i * 0.32) continue;
             p.setPen(QPen(cyan(), 2));
-            p.setBrush(QColor(22, 27, 37, 245));
+            p.setBrush(QColor(22, 27, 37));
             p.drawRoundedRect(QRectF(x, y, 470, 225), 8, 8);
             p.fillRect(QRectF(x + 1, y + 1, 468, 40), QColor(0, 87, 107));
             text(p, QRectF(x + 15, y + 3, 425, 35), "Excellent.exe  -  Fictional error", 20);
@@ -149,20 +149,23 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
         }
     } else if (effect.id == "corruption") {
         // Localized artifacts only: never sample or modify game pixels, and no full-screen flashes.
-        for (int i = 0; i < 20; ++i) {
+        const int blocks = 8 + static_cast<int>(strength * 20);
+        for (int i = 0; i < blocks; ++i) {
             const double x = between(random, 0, 1800), y = between(random, 0, 1040);
-            const double width = between(random, 60, 400), height = between(random, 3, 24);
+            const double width = between(random, 60, 400) * (0.55 + strength * 0.45);
+            const double height = between(random, 3, 24) * (0.55 + strength * 0.45);
             const double drift = std::sin(seconds * 2 + i) * 45;
-            p.fillRect(QRectF(x + drift, y, width, height), QColor(i % 2 ? 255 : 5, i % 2 ? 25 : 230, 230, static_cast<int>(strength * 115)));
+            p.fillRect(QRectF(x + drift, y, width, height), QColor(i % 2 ? 255 : 5, i % 2 ? 25 : 230, 230));
         }
-        p.setPen(QPen(QColor(0, 170, 190, static_cast<int>(strength * 65)), 1));
-        for (int y = 0; y < 1080; y += 9) p.drawLine(0, y, 1920, y);
-        text(p, QRectF(65, 55, 1200, 50), "0xEXCELLENT // SIGNAL INTEGRITY DEGRADED", 24, cyan(190));
+        p.setPen(QPen(QColor(0, 170, 190), 1));
+        const int scanlineGap = std::max(9, 24 - static_cast<int>(strength * 15));
+        for (int y = 0; y < 1080; y += scanlineGap) p.drawLine(0, y, 1920, y);
+        text(p, QRectF(65, 55, 1200, 50), "0xEXCELLENT // SIGNAL INTEGRITY DEGRADED", 24, cyan());
     } else if (effect.id == "darkness") {
         QRadialGradient gradient(QPointF(960 + std::sin(seconds * 0.4) * 120, 540), 1000);
-        gradient.setColorAt(0, QColor(0, 0, 0, 0));
-        gradient.setColorAt(0.25, QColor(0, 0, 0, 15));
-        gradient.setColorAt(1, QColor(0, 3, 9, static_cast<int>(80 + 170 * strength)));
+        gradient.setColorAt(0, QColor(0, 0, 0, static_cast<int>(85 + 75 * strength)));
+        gradient.setColorAt(0.25, QColor(0, 0, 0, static_cast<int>(115 + 80 * strength)));
+        gradient.setColorAt(1, QColor(0, 3, 9));
         p.fillRect(QRectF(0, 0, 1920, 1080), gradient);
     } else if (effect.id == "creepy_eyes") {
         for (int i = 0; i < 6; ++i) {
@@ -173,7 +176,7 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
             for (int eye = 0; eye < 2; ++eye) {
                 const QPointF center(x + eye * 65, y);
                 QRadialGradient glow(center, 50);
-                glow.setColorAt(0, cyan(static_cast<int>(180 * strength)));
+                glow.setColorAt(0, cyan());
                 glow.setColorAt(1, cyan(0));
                 p.setBrush(glow); p.setPen(Qt::NoPen); p.drawEllipse(center, 50, 40 * open);
                 p.setBrush(cyan()); p.drawEllipse(center, 20, 11 * open);
@@ -207,10 +210,10 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
         }
     } else if (effect.id == "jumpscare_lite") {
         const double appearance = clamp(seconds * 7, 0, 1);
-        p.setOpacity(fade * appearance * clamp(strength + 0.2, 0, 1));
+        p.setOpacity(fade * appearance);
         p.translate(960, 540);
         p.scale(0.75 + appearance * 0.25, 0.75 + appearance * 0.25);
-        p.setBrush(QColor(5, 15, 24, 240)); p.setPen(QPen(cyan(), 8));
+        p.setBrush(QColor(5, 15, 24)); p.setPen(QPen(cyan(), 8));
         p.drawRoundedRect(QRectF(-255, -240, 510, 470), 115, 115);
         p.setBrush(cyan()); p.setPen(Qt::NoPen); p.drawEllipse(QPointF(-105, -70), 60, 35); p.drawEllipse(QPointF(105, -70), 60, 35);
         p.setPen(QPen(cyan(), 13, Qt::SolidLine, Qt::RoundCap)); p.drawArc(QRectF(-130, -10, 260, 150), 180 * 16, 180 * 16);

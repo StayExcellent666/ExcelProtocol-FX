@@ -16,7 +16,8 @@ VERSION = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-bet
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/ExcelProtocol-FX$")
 DLL = "obs-plugins/64bit/excelprotocol-fx.dll"
 DATA = "data/obs-plugins/excelprotocol-fx/"
-REQUIRED = (DLL, DATA + "excelprotocol-fx-updater.exe", DATA + "locale/en-US.ini")
+REQUIRED = (DLL, DATA + "excelprotocol-fx-updater.exe", DATA + "locale/en-US.ini",
+            DATA + "tls/qschannelbackend.dll")
 QA_CHECKS = ("native_plugin_load", "desktop_and_obs_effects", "settings_persistence", "websocket_authentication", "installer_clean_install", "installer_upgrade_rollback", "installer_obs_running_refusal", "uninstall_preserves_obs", "stable_beta_update_selection", "update_digest_rejection", "update_after_obs_exit", "performance_and_panic_stop")
 
 

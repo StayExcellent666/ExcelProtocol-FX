@@ -27,9 +27,14 @@ int main(int argc, char **argv)
             check(!first.isNull(), "each effect renders");
             check(first == second, "same seed/time yields same frame");
             bool visible = false;
-            for (int y = 0; y < first.height() && !visible; ++y)
-                for (int x = 0; x < first.width(); ++x) if (qAlpha(first.pixel(x, y))) { visible = true; break; }
+            int maximumAlpha = 0;
+            for (int y = 0; y < first.height(); ++y)
+                for (int x = 0; x < first.width(); ++x) {
+                    maximumAlpha = std::max(maximumAlpha, qAlpha(first.pixel(x, y)));
+                    if (qAlpha(first.pixel(x, y))) visible = true;
+                }
             check(visible, "each effect produces visible pixels");
+            if (def.id != "fog") check(maximumAlpha == 255, "non-fog effects contain fully opaque pixels");
         }
         check(manager.trigger("ink_splatter", 60000) == "invalid_duration", "hard duration limit");
         check(manager.trigger("ink_splatter", -1, std::numeric_limits<double>::quiet_NaN()) == "invalid_intensity", "NaN rejected");

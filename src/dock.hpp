@@ -18,6 +18,8 @@ public:
 private:
     QWidget *dashboard();
     QWidget *library();
+    QWidget *advanced();
+    QWidget *randomSettings();
     QWidget *display();
     QWidget *integration();
     void refreshMonitors();

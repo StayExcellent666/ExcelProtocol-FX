@@ -35,6 +35,7 @@ class ReleaseTests(unittest.TestCase):
         locale = self.stage / release.REQUIRED[2]
         locale.parent.mkdir(parents=True)
         locale.write_text('Name="ExcelProtocol FX"', encoding="utf-8")
+        pe(self.stage / release.REQUIRED[3])
         pe(self.output / "ExcelProtocol-FX-1.0.0-windows-x64-setup.exe", 0x14C)
         self.commit = "a" * 40
 
@@ -87,6 +88,11 @@ class ReleaseTests(unittest.TestCase):
 
     def test_missing_helper_rejected(self):
         (self.stage / release.REQUIRED[1]).unlink()
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_missing_tls_backend_rejected(self):
+        (self.stage / release.REQUIRED[3]).unlink()
         with self.assertRaises(ValueError):
             self.build()
 

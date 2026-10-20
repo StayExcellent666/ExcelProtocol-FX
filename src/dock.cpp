@@ -10,6 +10,7 @@
 #include <QFormLayout>
 #include <QGuiApplication>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QJsonDocument>
 #include <QLabel>
 #include <QPlainTextEdit>
@@ -53,6 +54,8 @@ FxDock::FxDock(EffectManager &manager, QWidget *parent) : QWidget(parent), manag
     auto *tabs = new QTabWidget;
     tabs->addTab(scrollable(dashboard()), "Dashboard");
     tabs->addTab(scrollable(library()), "Effects");
+    tabs->addTab(scrollable(advanced()), "Advanced");
+    tabs->addTab(scrollable(randomSettings()), "Random");
     tabs->addTab(scrollable(display()), "Display");
     tabs->addTab(scrollable(integration()), "Connection");
     updates_ = new UpdateController(this);
@@ -103,22 +106,6 @@ QWidget *FxDock::dashboard()
     QObject::connect(maximum, &QSpinBox::valueChanged, this, [this](int value) { manager_.setMaxSimultaneous(value); });
     form->addRow("Maximum simultaneous", maximum);
     layout->addLayout(form);
-    auto *chaosGroup = new QGroupBox("Chaos Protocol limits"); auto *chaosForm = new QFormLayout(chaosGroup);
-    const struct { const char *key; const char *label; int low; int high; int initial; } limits[] = {
-        {"minimum", "Minimum effects", 1, 4, 2}, {"maximum", "Maximum effects", 1, 4, 3}, {"durationMs", "Duration (ms)", 1000, 15000, 7000}};
-    for (const auto &limit : limits) {
-        auto *spin = new QSpinBox; spin->setRange(limit.low, limit.high);
-        const QString key = QString("chaos/") + limit.key;
-        spin->setValue(manager_.settings().value(key, limit.initial).toInt());
-        QObject::connect(spin, &QSpinBox::valueChanged, this, [this, key](int value) { manager_.settings().setValue(key, value); });
-        chaosForm->addRow(limit.label, spin);
-    }
-    auto *combined = new QDoubleSpinBox; combined->setRange(0.1, 3); combined->setSingleStep(0.1);
-    combined->setValue(manager_.settings().value("chaos/maxCombinedIntensity", 1.8).toDouble());
-    QObject::connect(combined, &QDoubleSpinBox::valueChanged, this, [this](double value) { manager_.settings().setValue("chaos/maxCombinedIntensity", value); });
-    chaosForm->addRow("Combined intensity cap", combined);
-    chaosForm->addRow(note("Crash and Jumpscare run alone. Chaos respects enabled effects, weights, cooldowns, and the simultaneous limit."));
-    layout->addWidget(chaosGroup);
     layout->addWidget(note("Audio is not included in v1.0.0. All effects are visual and silent."));
     layout->addStretch(); return widget;
 }
@@ -126,7 +113,22 @@ QWidget *FxDock::dashboard()
 QWidget *FxDock::library()
 {
     auto *widget = new QWidget; auto *layout = new QVBoxLayout(widget);
-    layout->addWidget(note("Effect intensity controls that effect's size, density, darkness, or motion. It is multiplied by the Overall intensity master control. Random weight is a relative chance used only by Random Effect and Chaos Protocol; a weight of 2 is selected about twice as often as a weight of 1."));
+    layout->addWidget(note("Per-effect intensity controls size, density, darkness, or motion and is multiplied by Overall intensity. Opacity remains solid for every effect except Fog; effects still fade briefly when ending."));
+    auto *form = new QFormLayout;
+    for (int index = 0; index < manager_.definitions().size(); ++index) {
+        const auto &def = manager_.definitions()[index];
+        auto *intensity = new QDoubleSpinBox; intensity->setRange(0.05, 1); intensity->setSingleStep(0.05); intensity->setValue(def.intensity);
+        QObject::connect(intensity, &QDoubleSpinBox::valueChanged, this, [this, index](double value) { manager_.definitions()[index].intensity = value; manager_.saveSettings(); });
+        form->addRow(def.name, intensity);
+    }
+    layout->addLayout(form);
+    layout->addStretch(); return widget;
+}
+
+QWidget *FxDock::advanced()
+{
+    auto *widget = new QWidget; auto *layout = new QVBoxLayout(widget);
+    layout->addWidget(note("Enable, preview, duration, cooldown, and effect-specific controls."));
     for (int index = 0; index < manager_.definitions().size(); ++index) {
         const auto &def = manager_.definitions()[index];
         auto *group = new QGroupBox(def.name); auto *form = new QFormLayout(group);
@@ -144,17 +146,6 @@ QWidget *FxDock::library()
         auto *cooldown = new QSpinBox; cooldown->setRange(1, 600); cooldown->setSuffix(" s"); cooldown->setValue(def.cooldownMs / 1000);
         QObject::connect(cooldown, &QSpinBox::valueChanged, this, [this, index](int value) { manager_.definitions()[index].cooldownMs = value * 1000; manager_.saveSettings(); });
         form->addRow("Cooldown", cooldown);
-        auto *intensity = new QDoubleSpinBox; intensity->setRange(0.05, 1); intensity->setSingleStep(0.05); intensity->setValue(def.intensity);
-        QObject::connect(intensity, &QDoubleSpinBox::valueChanged, this, [this, index](double value) { manager_.definitions()[index].intensity = value; manager_.saveSettings(); });
-        form->addRow("Effect intensity", intensity);
-        auto *weight = new QDoubleSpinBox; weight->setRange(0, 100); weight->setSingleStep(0.5); weight->setValue(def.weight);
-        QObject::connect(weight, &QDoubleSpinBox::valueChanged, this, [this, index](double value) { manager_.definitions()[index].weight = value; manager_.saveSettings(); });
-        form->addRow("Random weight (relative)", weight);
-        if (!def.exclusive) {
-            auto *allow = new QCheckBox("Allowed in Chaos Protocol"); const QString key = "chaos/allowed/" + def.id;
-            allow->setChecked(manager_.settings().value(key, true).toBool());
-            QObject::connect(allow, &QCheckBox::toggled, this, [this, key](bool value) { manager_.settings().setValue(key, value); }); form->addRow(allow);
-        }
         if (def.id == "crash") {
             auto *style = new QComboBox; style->addItems({"Cyan recovery screen", "Error panel", "Terminal recovery"}); style->setCurrentIndex(def.parameters.value("style").toInt());
             QObject::connect(style, &QComboBox::currentIndexChanged, this, [this, index](int value) { manager_.definitions()[index].parameters.insert("style", value); manager_.saveSettings(); }); form->addRow("Style", style);
@@ -172,6 +163,45 @@ QWidget *FxDock::library()
         QObject::connect(test, &QPushButton::clicked, this, [this, id] { manager_.trigger(id); }); form->addRow(test);
         layout->addWidget(group);
     }
+    layout->addStretch(); return widget;
+}
+
+QWidget *FxDock::randomSettings()
+{
+    auto *widget = new QWidget; auto *layout = new QVBoxLayout(widget);
+    layout->addWidget(note("Random weight is relative: weight 2 is selected about twice as often as weight 1. Weight 0 removes an effect from Random Effect and Chaos Protocol. Manual previews ignore weight."));
+    auto *weights = new QGroupBox("Effect selection weights"); auto *weightForm = new QFormLayout(weights);
+    for (int index = 0; index < manager_.definitions().size(); ++index) {
+        const auto &def = manager_.definitions()[index];
+        auto *row = new QWidget; auto *rowLayout = new QHBoxLayout(row); rowLayout->setContentsMargins(0, 0, 0, 0);
+        auto *weight = new QDoubleSpinBox; weight->setRange(0, 100); weight->setSingleStep(0.5); weight->setValue(def.weight);
+        QObject::connect(weight, &QDoubleSpinBox::valueChanged, this, [this, index](double value) { manager_.definitions()[index].weight = value; manager_.saveSettings(); });
+        rowLayout->addWidget(weight);
+        if (!def.exclusive) {
+            auto *allow = new QCheckBox("Chaos"); const QString key = "chaos/allowed/" + def.id;
+            allow->setChecked(manager_.settings().value(key, true).toBool());
+            QObject::connect(allow, &QCheckBox::toggled, this, [this, key](bool value) { manager_.settings().setValue(key, value); manager_.settings().sync(); });
+            rowLayout->addWidget(allow);
+        }
+        weightForm->addRow(def.name, row);
+    }
+    layout->addWidget(weights);
+    auto *chaosGroup = new QGroupBox("Chaos Protocol limits"); auto *chaosForm = new QFormLayout(chaosGroup);
+    const struct { const char *key; const char *label; int low; int high; int initial; } limits[] = {
+        {"minimum", "Minimum effects", 1, 4, 2}, {"maximum", "Maximum effects", 1, 4, 3}, {"durationMs", "Duration (ms)", 1000, 15000, 7000}};
+    for (const auto &limit : limits) {
+        auto *spin = new QSpinBox; spin->setRange(limit.low, limit.high);
+        const QString key = QString("chaos/") + limit.key;
+        spin->setValue(manager_.settings().value(key, limit.initial).toInt());
+        QObject::connect(spin, &QSpinBox::valueChanged, this, [this, key](int value) { manager_.settings().setValue(key, value); manager_.settings().sync(); });
+        chaosForm->addRow(limit.label, spin);
+    }
+    auto *combined = new QDoubleSpinBox; combined->setRange(0.1, 3); combined->setSingleStep(0.1);
+    combined->setValue(manager_.settings().value("chaos/maxCombinedIntensity", 1.8).toDouble());
+    QObject::connect(combined, &QDoubleSpinBox::valueChanged, this, [this](double value) { manager_.settings().setValue("chaos/maxCombinedIntensity", value); manager_.settings().sync(); });
+    chaosForm->addRow("Combined intensity cap", combined);
+    chaosForm->addRow(note("Crash and Jumpscare run alone. Chaos also respects enabled effects, cooldowns, and the simultaneous limit."));
+    layout->addWidget(chaosGroup);
     layout->addStretch(); return widget;
 }
 

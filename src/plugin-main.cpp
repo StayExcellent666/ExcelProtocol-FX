@@ -5,10 +5,13 @@
 #include <obs-frontend-api.h>
 #include <obs-hotkey.h>
 #include <QApplication>
+#include <QCoreApplication>
+#include <QDir>
 #include <QMetaObject>
 #include <QPointer>
 #include <memory>
 #include <mutex>
+#include <util/bmem.h>
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("excelprotocol-fx", "en-US")
@@ -156,6 +159,12 @@ MODULE_EXPORT const char *obs_module_author(void) { return "ExcelProtocol"; }
 
 bool obs_module_load(void)
 {
+    // OBS ships QtNetwork but does not ship a Qt TLS backend. The release
+    // installs Schannel under this plugin-owned data directory.
+    if (char *dataPath = obs_module_file("")) {
+        QCoreApplication::addLibraryPath(QDir::cleanPath(QString::fromUtf8(dataPath)));
+        bfree(dataPath);
+    }
     struct obs_source_info info{};
     info.id = "excelprotocol_fx";
     info.type = OBS_SOURCE_TYPE_INPUT;
