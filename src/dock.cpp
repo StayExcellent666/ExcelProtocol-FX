@@ -126,6 +126,7 @@ QWidget *FxDock::dashboard()
 QWidget *FxDock::library()
 {
     auto *widget = new QWidget; auto *layout = new QVBoxLayout(widget);
+    layout->addWidget(note("Effect intensity controls that effect's size, density, darkness, or motion. It is multiplied by the Overall intensity master control. Random weight is a relative chance used only by Random Effect and Chaos Protocol; a weight of 2 is selected about twice as often as a weight of 1."));
     for (int index = 0; index < manager_.definitions().size(); ++index) {
         const auto &def = manager_.definitions()[index];
         auto *group = new QGroupBox(def.name); auto *form = new QFormLayout(group);
@@ -145,10 +146,10 @@ QWidget *FxDock::library()
         form->addRow("Cooldown", cooldown);
         auto *intensity = new QDoubleSpinBox; intensity->setRange(0.05, 1); intensity->setSingleStep(0.05); intensity->setValue(def.intensity);
         QObject::connect(intensity, &QDoubleSpinBox::valueChanged, this, [this, index](double value) { manager_.definitions()[index].intensity = value; manager_.saveSettings(); });
-        form->addRow("Intensity", intensity);
+        form->addRow("Effect intensity", intensity);
         auto *weight = new QDoubleSpinBox; weight->setRange(0, 100); weight->setSingleStep(0.5); weight->setValue(def.weight);
         QObject::connect(weight, &QDoubleSpinBox::valueChanged, this, [this, index](double value) { manager_.definitions()[index].weight = value; manager_.saveSettings(); });
-        form->addRow("Random weight", weight);
+        form->addRow("Random weight (relative)", weight);
         if (!def.exclusive) {
             auto *allow = new QCheckBox("Allowed in Chaos Protocol"); const QString key = "chaos/allowed/" + def.id;
             allow->setChecked(manager_.settings().value(key, true).toBool());
@@ -161,6 +162,9 @@ QWidget *FxDock::library()
         if (def.id == "ink_splatter") {
             auto *count = new QSpinBox; count->setRange(1, 12); count->setValue(def.parameters.value("splatters").toInt());
             QObject::connect(count, &QSpinBox::valueChanged, this, [this, index](int value) { manager_.definitions()[index].parameters.insert("splatters", value); manager_.saveSettings(); }); form->addRow("Splatters", count);
+            auto *opacity = new QDoubleSpinBox; opacity->setRange(0.1, 1.0); opacity->setSingleStep(0.05); opacity->setDecimals(2);
+            opacity->setValue(def.parameters.value("opacity").toDouble(1.0));
+            QObject::connect(opacity, &QDoubleSpinBox::valueChanged, this, [this, index](double value) { manager_.definitions()[index].parameters.insert("opacity", value); manager_.saveSettings(); }); form->addRow("Ink opacity", opacity);
             auto *drips = new QCheckBox("Animate drips"); drips->setChecked(def.parameters.value("drips").toBool());
             QObject::connect(drips, &QCheckBox::toggled, this, [this, index](bool value) { manager_.definitions()[index].parameters.insert("drips", value); manager_.saveSettings(); }); form->addRow(drips);
         }

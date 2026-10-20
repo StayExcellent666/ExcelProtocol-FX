@@ -77,6 +77,8 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
         p.fillRect(QRectF(left, top + 390, 1050 * progress, 5), cyan());
     } else if (effect.id == "ink_splatter") {
         const int count = std::clamp(effect.parameters.value("splatters").toInt(3 + static_cast<int>(strength * 8)), 1, 12);
+        const double inkOpacity = clamp(effect.parameters.value("opacity").toDouble(1.0), 0.1, 1.0);
+        const int inkAlpha = qRound(255 * inkOpacity);
         for (int i = 0; i < count; ++i) {
             const QPointF center(between(random, 100, 1820), between(random, 100, 980));
             const double radius = between(random, 95, 245) * (0.6 + strength * 0.6);
@@ -95,7 +97,7 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
             p.rotate(rotation);
             const double growth = clamp(age * 5, 0, 1);
             p.scale(growth, growth);
-            p.setBrush(QColor(4, 13, 23, static_cast<int>(170 + strength * 85)));
+            p.setBrush(QColor(4, 13, 23, inkAlpha));
             p.drawPath(shape);
             for (int j = 0; j < 13; ++j) {
                 const double angle = between(random, 0, 2 * pi), distance = radius * between(random, 1, 1.6);
@@ -104,7 +106,7 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
             }
             p.restore();
             if (age > 0 && effect.parameters.value("drips").toBool(true)) {
-                p.setPen(QPen(QColor(4, 13, 23, 195), 9, Qt::SolidLine, Qt::RoundCap));
+                p.setPen(QPen(QColor(4, 13, 23, inkAlpha), 9, Qt::SolidLine, Qt::RoundCap));
                 p.drawLine(center + QPointF(radius * 0.3, radius * 0.6),
                            center + QPointF(radius * 0.3, radius * 0.6 + std::min(age * 18, 125.0)));
                 p.setPen(Qt::NoPen);
@@ -307,7 +309,7 @@ EffectManager::EffectManager(QObject *parent)
 {
     definitions_ = {
         {"crash", "Excellent.exe Crashed", "Fictional crash with automatic recovery.", "System", 5000, 1000, 15000, 15000, 0.65, 1, true, true, {{"style", 0}}},
-        {"ink_splatter", "Ink Splatter", "Seeded organic ink shapes and gradual drips.", "Obstruction", 8000, 1000, 30000, 10000, 0.65, 1, true, false, {{"splatters", 5}, {"drips", true}}},
+        {"ink_splatter", "Ink Splatter", "Seeded organic ink shapes and gradual drips.", "Obstruction", 8000, 1000, 30000, 10000, 0.65, 1, true, false, {{"splatters", 5}, {"drips", true}, {"opacity", 1.0}}},
         {"screen_cracks", "Screen Cracks", "Simulated glass impact and fading fracture lines.", "Surface", 7000},
         {"error_invasion", "Error Window Invasion", "Fictional error windows recover automatically.", "System", 7000},
         {"corruption", "System Corruption", "Localized digital artifacts, scanlines, and text.", "System", 6000},
@@ -423,6 +425,7 @@ QString EffectManager::trigger(const QString &id, int durationMs, double intensi
     for (auto it = parameters.begin(); it != parameters.end(); ++it) {
         if (!selected.contains(it.key())) return result(id, "invalid_parameter", origin);
         if (it.key() == "splatters" && (!it->isDouble() || it->toDouble() != it->toInt() || it->toInt() < 1 || it->toInt() > 12)) return result(id, "invalid_parameter", origin);
+        if (it.key() == "opacity" && (!it->isDouble() || !std::isfinite(it->toDouble()) || it->toDouble() < 0.1 || it->toDouble() > 1.0)) return result(id, "invalid_parameter", origin);
         if (it.key() == "style" && (!it->isDouble() || it->toDouble() != it->toInt() || it->toInt() < 0 || it->toInt() > 2)) return result(id, "invalid_parameter", origin);
         if (it.key() == "drips" && !it->isBool()) return result(id, "invalid_parameter", origin);
         selected.insert(it.key(), it.value());

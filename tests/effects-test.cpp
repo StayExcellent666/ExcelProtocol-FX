@@ -34,6 +34,15 @@ int main(int argc, char **argv)
         check(manager.trigger("ink_splatter", 60000) == "invalid_duration", "hard duration limit");
         check(manager.trigger("ink_splatter", -1, std::numeric_limits<double>::quiet_NaN()) == "invalid_intensity", "NaN rejected");
         check(manager.trigger("ink_splatter", -1, 0.5, {{"splatters", 10000}}) == "invalid_parameter", "bounded effect parameters");
+        check(manager.trigger("ink_splatter", -1, 0.5, {{"opacity", 0.0}}) == "invalid_parameter", "bounded ink opacity");
+        const QVector<fx::ActiveEffect> opaqueInk{{"ink_splatter", 42901, 0, 8000, 1.0,
+                                                  {{"splatters", 5}, {"drips", true}, {"opacity", 1.0}}}};
+        const auto inkFrame = fx::renderEffects(QSize(640, 360), opaqueInk, 1000, 0.25);
+        int maximumAlpha = 0;
+        for (int y = 0; y < inkFrame.height(); ++y)
+            for (int x = 0; x < inkFrame.width(); ++x)
+                maximumAlpha = std::max(maximumAlpha, qAlpha(inkFrame.pixel(x, y)));
+        check(maximumAlpha == 255, "full ink opacity is opaque independently of intensity");
         check(manager.trigger("crash", 1000) == "triggered", "valid effect accepted");
         check(manager.trigger("ink_splatter") == "conflict", "exclusive effects isolated");
         manager.clear();
