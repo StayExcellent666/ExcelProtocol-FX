@@ -18,6 +18,16 @@ int main(int argc, char **argv)
     QApplication app(argc, argv);
     QFile::remove(fx::settingsPath());
     {
+        // Older INI files can deserialize JSON defaults as strings. The
+        // effect catalog must still publish protocol-safe primitive types.
+        QSettings legacy(fx::settingsPath(), QSettings::IniFormat);
+        legacy.setValue("library/ink_splatter/splatters", "12");
+        legacy.setValue("library/ink_splatter/drips", "true");
+        legacy.setValue("library/ink_splatter/opacity", "1");
+        legacy.setValue("library/ink_splatter/size", "1");
+        legacy.sync();
+    }
+    {
         fx::EffectManager manager;
         manager.setDesktopEnabled(false);
         check(manager.active().empty(), "no startup activation");
@@ -41,8 +51,9 @@ int main(int argc, char **argv)
         check(manager.trigger("ink_splatter", -1, std::numeric_limits<double>::quiet_NaN()) == "invalid_intensity", "NaN rejected");
         check(manager.trigger("ink_splatter", -1, 0.5, {{"splatters", 10000}}) == "invalid_parameter", "bounded effect parameters");
         check(manager.trigger("ink_splatter", -1, 0.5, {{"opacity", 0.0}}) == "invalid_parameter", "bounded ink opacity");
+        check(manager.trigger("ink_splatter", -1, 0.5, {{"size", 2.0}}) == "invalid_parameter", "bounded ink size");
         const QVector<fx::ActiveEffect> opaqueInk{{"ink_splatter", 42901, 0, 8000, 1.0,
-                                                  {{"splatters", 5}, {"drips", true}, {"opacity", 1.0}}}};
+                                                  {{"splatters", 5}, {"drips", true}, {"opacity", 1.0}, {"size", 1.0}}}};
         const auto inkFrame = fx::renderEffects(QSize(640, 360), opaqueInk, 1000, 0.25);
         int maximumAlpha = 0;
         for (int y = 0; y < inkFrame.height(); ++y)
@@ -70,6 +81,10 @@ int main(int argc, char **argv)
         const auto inkMetadata = catalog.at(1).toObject().value("parameters").toObject();
         check(inkMetadata.value("splatters").toObject().value("max").toInt() == 12, "effect catalog reports parameter limits");
         check(inkMetadata.value("drips").toObject().value("type") == "boolean", "effect catalog reports parameter types");
+        check(inkMetadata.value("splatters").toObject().value("default").isDouble(), "integer default is numeric");
+        check(inkMetadata.value("drips").toObject().value("default").isBool(), "drips default is boolean");
+        check(inkMetadata.value("opacity").toObject().value("default").toDouble() == 1.0, "full opacity default is valid");
+        check(inkMetadata.value("size").toObject().value("control") == "range", "ink size is exposed as a slider");
         manager.shutdown();
         check(manager.trigger("fog") == "disabled", "shutdown blocks activation");
     }

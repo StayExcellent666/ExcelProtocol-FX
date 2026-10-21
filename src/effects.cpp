@@ -38,6 +38,20 @@ double clamp(double value, double low, double high) { return std::clamp(value, l
 
 QColor cyan(int alpha = 255) { return QColor(33, 231, 245, alpha); }
 
+QJsonValue typedSetting(QSettings &settings, const QString &key, const QJsonValue &fallback)
+{
+    const QVariant stored = settings.value(key, fallback.toVariant());
+    if (key.endsWith("/style") || key.endsWith("/splatters")) return stored.toInt();
+    if (fallback.isBool()) {
+        const QString text = stored.toString().trimmed().toLower();
+        if (text == "false" || text == "0" || text == "no" || text == "off") return false;
+        if (text == "true" || text == "1" || text == "yes" || text == "on") return true;
+        return stored.toBool();
+    }
+    if (fallback.isDouble()) return stored.toDouble();
+    return QJsonValue::fromVariant(stored);
+}
+
 void text(QPainter &painter, const QRectF &rect, const QString &value, int size,
           QColor color = Qt::white, int flags = Qt::AlignLeft | Qt::AlignVCenter)
 {
@@ -78,19 +92,25 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
     } else if (effect.id == "ink_splatter") {
         const int count = std::clamp(effect.parameters.value("splatters").toInt(3 + static_cast<int>(strength * 8)), 1, 12);
         const double inkOpacity = clamp(effect.parameters.value("opacity").toDouble(1.0), 0.1, 1.0);
+        const double inkSize = clamp(effect.parameters.value("size").toDouble(1.0), 0.5, 1.5);
         const int inkAlpha = qRound(255 * inkOpacity);
         for (int i = 0; i < count; ++i) {
             const QPointF center(between(random, 100, 1820), between(random, 100, 980));
-            const double radius = between(random, 95, 245) * (0.6 + strength * 0.6);
+            const double radius = between(random, 95, 245) * (0.6 + strength * 0.6) * inkSize;
             const double rotation = between(random, 0, 360);
             const double age = seconds - i * 0.15;
             QPainterPath shape;
-            for (int j = 0; j <= 28; ++j) {
-                const double angle = j * 2 * pi / 28;
-                const double r = radius * between(random, 0.6, 1.1);
-                const QPointF point(std::cos(angle) * r, std::sin(angle) * r);
-                if (j == 0) shape.moveTo(point); else shape.lineTo(point);
+            QVector<QPointF> outline;
+            constexpr int points = 20;
+            outline.reserve(points);
+            for (int j = 0; j < points; ++j) {
+                const double angle = j * 2 * pi / points;
+                const double r = radius * between(random, 0.78, 1.08);
+                outline.push_back(QPointF(std::cos(angle) * r, std::sin(angle) * r));
             }
+            shape.moveTo((outline.back() + outline.front()) / 2.0);
+            for (int j = 0; j < points; ++j)
+                shape.quadTo(outline[j], (outline[j] + outline[(j + 1) % points]) / 2.0);
             shape.closeSubpath();
             p.save();
             p.translate(center);
@@ -102,7 +122,7 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
             for (int j = 0; j < 13; ++j) {
                 const double angle = between(random, 0, 2 * pi), distance = radius * between(random, 1, 1.6);
                 const double blob = between(random, 5, 22);
-                p.drawEllipse(QPointF(std::cos(angle) * distance, std::sin(angle) * distance), blob, blob * 0.75);
+                p.drawEllipse(QPointF(std::cos(angle) * distance, std::sin(angle) * distance), blob, blob);
             }
             p.restore();
             if (age > 0 && effect.parameters.value("drips").toBool(true)) {
@@ -312,7 +332,7 @@ EffectManager::EffectManager(QObject *parent)
 {
     definitions_ = {
         {"crash", "Excellent.exe Crashed", "Fictional crash with automatic recovery.", "System", 5000, 1000, 15000, 15000, 0.65, 1, true, true, {{"style", 0}}},
-        {"ink_splatter", "Ink Splatter", "Seeded organic ink shapes and gradual drips.", "Obstruction", 8000, 1000, 30000, 10000, 0.65, 1, true, false, {{"splatters", 5}, {"drips", true}, {"opacity", 1.0}}},
+        {"ink_splatter", "Ink Splatter", "Rounded organic ink shapes and gradual drips.", "Obstruction", 8000, 1000, 30000, 10000, 0.65, 1, true, false, {{"splatters", 5}, {"drips", true}, {"opacity", 1.0}, {"size", 1.0}}},
         {"screen_cracks", "Screen Cracks", "Simulated glass impact and fading fracture lines.", "Surface", 7000},
         {"error_invasion", "Error Window Invasion", "Fictional error windows recover automatically.", "System", 7000},
         {"corruption", "System Corruption", "Localized digital artifacts, scanlines, and text.", "System", 6000},
@@ -358,7 +378,7 @@ void EffectManager::loadSettings()
         effect.intensity = clamp(settings_.value(prefix + "intensity", effect.intensity).toDouble(), 0.05, 1);
         effect.weight = clamp(settings_.value(prefix + "weight", effect.weight).toDouble(), 0, 100);
         for (auto it = effect.parameters.begin(); it != effect.parameters.end(); ++it)
-            it.value() = QJsonValue::fromVariant(settings_.value(prefix + it.key(), it.value().toVariant()));
+            it.value() = typedSetting(settings_, prefix + it.key(), it.value());
     }
 }
 
@@ -429,6 +449,7 @@ QString EffectManager::trigger(const QString &id, int durationMs, double intensi
         if (!selected.contains(it.key())) return result(id, "invalid_parameter", origin);
         if (it.key() == "splatters" && (!it->isDouble() || it->toDouble() != it->toInt() || it->toInt() < 1 || it->toInt() > 12)) return result(id, "invalid_parameter", origin);
         if (it.key() == "opacity" && (!it->isDouble() || !std::isfinite(it->toDouble()) || it->toDouble() < 0.1 || it->toDouble() > 1.0)) return result(id, "invalid_parameter", origin);
+        if (it.key() == "size" && (!it->isDouble() || !std::isfinite(it->toDouble()) || it->toDouble() < 0.5 || it->toDouble() > 1.5)) return result(id, "invalid_parameter", origin);
         if (it.key() == "style" && (!it->isDouble() || it->toDouble() != it->toInt() || it->toInt() < 0 || it->toInt() > 2)) return result(id, "invalid_parameter", origin);
         if (it.key() == "drips" && !it->isBool()) return result(id, "invalid_parameter", origin);
         selected.insert(it.key(), it.value());
@@ -607,11 +628,13 @@ QJsonObject EffectManager::command(const QJsonObject &request)
                     {"min", 0}, {"max", 2}, {"step", 1}, {"default", def.parameters.value("style")}});
             } else if (def.id == "ink_splatter") {
                 parameters.insert("splatters", QJsonObject{{"type", "integer"}, {"label", "Splatters"},
-                    {"min", 1}, {"max", 12}, {"step", 1}, {"default", def.parameters.value("splatters")}});
+                    {"min", 1}, {"max", 12}, {"step", 1}, {"default", def.parameters.value("splatters").toInt(5)}});
                 parameters.insert("drips", QJsonObject{{"type", "boolean"}, {"label", "Animate drips"},
-                    {"default", def.parameters.value("drips")}});
+                    {"default", def.parameters.value("drips").toBool(true)}});
                 parameters.insert("opacity", QJsonObject{{"type", "number"}, {"label", "Ink opacity"},
-                    {"min", 0.1}, {"max", 1.0}, {"step", 0.05}, {"default", def.parameters.value("opacity")}});
+                    {"min", 0.1}, {"max", 1.0}, {"step", 0.05}, {"default", def.parameters.value("opacity").toDouble(1.0)}});
+                parameters.insert("size", QJsonObject{{"type", "number"}, {"label", "Splatter size"},
+                    {"control", "range"}, {"min", 0.5}, {"max", 1.5}, {"step", 0.05}, {"default", def.parameters.value("size").toDouble(1.0)}});
             }
             values.push_back(QJsonObject{
                 {"id", def.id}, {"name", def.name}, {"description", def.description}, {"category", def.category},

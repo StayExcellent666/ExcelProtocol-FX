@@ -167,6 +167,9 @@ QWidget *FxDock::advanced()
             auto *opacity = new QDoubleSpinBox; opacity->setRange(0.1, 1.0); opacity->setSingleStep(0.05); opacity->setDecimals(2);
             opacity->setValue(def.parameters.value("opacity").toDouble(1.0));
             QObject::connect(opacity, &QDoubleSpinBox::valueChanged, this, [this, index](double value) { manager_.definitions()[index].parameters.insert("opacity", value); manager_.saveSettings(); }); form->addRow("Ink opacity", opacity);
+            auto *size = new QDoubleSpinBox; size->setRange(0.5, 1.5); size->setSingleStep(0.05); size->setDecimals(2);
+            size->setValue(def.parameters.value("size").toDouble(1.0));
+            QObject::connect(size, &QDoubleSpinBox::valueChanged, this, [this, index](double value) { manager_.definitions()[index].parameters.insert("size", value); manager_.saveSettings(); }); form->addRow("Splatter size", size);
             auto *drips = new QCheckBox("Animate drips"); drips->setChecked(def.parameters.value("drips").toBool());
             QObject::connect(drips, &QCheckBox::toggled, this, [this, index](bool value) { manager_.definitions()[index].parameters.insert("drips", value); manager_.saveSettings(); }); form->addRow(drips);
         }
