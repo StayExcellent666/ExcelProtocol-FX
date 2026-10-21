@@ -14,7 +14,7 @@ public:
 
     void setEnabled(bool enabled);
     void setVolume(int percent);
-    void play(const QString &path);
+    void play(const QString &path, const QString &group, double gain, int priority);
     void cleanup();
     void stop();
 

@@ -3,6 +3,7 @@
 #include <QByteArray>
 #include <QFile>
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -38,7 +39,7 @@ struct WaveData {
     QByteArray samples;
 };
 
-bool loadWave(const QString &path, int volume, WaveData &result)
+bool loadWave(const QString &path, double gain, WaveData &result)
 {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) return false;
@@ -68,7 +69,7 @@ bool loadWave(const QString &path, int volume, WaveData &result)
     if (result.format.wFormatTag != WAVE_FORMAT_PCM || result.format.wBitsPerSample != 16
         || (result.format.nChannels != 1 && result.format.nChannels != 2)) return false;
     result.samples = samples;
-    const double gain = std::clamp(volume, 0, 100) / 100.0;
+    gain = std::clamp(gain, 0.0, 1.0);
     auto *values = reinterpret_cast<qint16 *>(result.samples.data());
     const qsizetype count = result.samples.size() / static_cast<qsizetype>(sizeof(qint16));
     for (qsizetype index = 0; index < count; ++index)
@@ -82,14 +83,22 @@ struct RaidAudio::Impl {
         HWAVEOUT output = nullptr;
         WAVEHDR header{};
         QByteArray samples;
+        QString group;
+        int priority = 0;
+        quint64 order = 0;
     };
     bool enabled = true;
     int volume = 70;
+    quint64 nextOrder = 0;
     std::vector<std::unique_ptr<Voice>> voices;
 
     void release(Voice &voice)
     {
         if (!voice.output) return;
+        // Reset is synchronous and returns all queued buffers to the caller.
+        // Always do this before unpreparing memory so plugin shutdown remains
+        // safe even when OBS closes during a cue.
+        waveOutReset(voice.output);
         waveOutUnprepareHeader(voice.output, &voice.header, sizeof(voice.header));
         waveOutClose(voice.output);
         voice.output = nullptr;
@@ -107,14 +116,36 @@ void RaidAudio::setEnabled(bool enabled)
 
 void RaidAudio::setVolume(int percent) { impl_->volume = std::clamp(percent, 0, 100); }
 
-void RaidAudio::play(const QString &path)
+void RaidAudio::play(const QString &path, const QString &group, double gain, int priority)
 {
     cleanup();
-    if (!impl_->enabled || impl_->volume <= 0 || impl_->voices.size() >= 12) return;
+    if (!impl_->enabled || impl_->volume <= 0) return;
+    if (group == "stinger") stop();
+    const auto sameGroup = std::find_if(impl_->voices.begin(), impl_->voices.end(), [&group](const auto &voice) {
+        return voice->group == group;
+    });
+    if (sameGroup != impl_->voices.end()) {
+        if ((*sameGroup)->priority >= priority) return;
+        impl_->release(**sameGroup);
+        impl_->voices.erase(sameGroup);
+    }
+    if (impl_->voices.size() >= 3) {
+        const auto quietest = std::min_element(impl_->voices.begin(), impl_->voices.end(), [](const auto &left, const auto &right) {
+            return left->priority != right->priority ? left->priority < right->priority : left->order < right->order;
+        });
+        if (quietest == impl_->voices.end() || (*quietest)->priority >= priority) return;
+        impl_->release(**quietest);
+        impl_->voices.erase(quietest);
+    }
     WaveData wave;
-    if (!loadWave(path, impl_->volume, wave)) return;
+    const double master = impl_->volume / 100.0;
+    const double overlapHeadroom = 1.0 / std::sqrt(1.0 + impl_->voices.size() * 0.7);
+    if (!loadWave(path, master * gain * overlapHeadroom, wave)) return;
     auto voice = std::make_unique<Impl::Voice>();
     voice->samples = std::move(wave.samples);
+    voice->group = group;
+    voice->priority = priority;
+    voice->order = ++impl_->nextOrder;
     if (waveOutOpen(&voice->output, WAVE_MAPPER, &wave.format, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) return;
     voice->header.lpData = voice->samples.data();
     voice->header.dwBufferLength = static_cast<DWORD>(voice->samples.size());
@@ -140,10 +171,7 @@ void RaidAudio::cleanup()
 
 void RaidAudio::stop()
 {
-    for (auto &voice : impl_->voices) {
-        if (voice->output) waveOutReset(voice->output);
-        impl_->release(*voice);
-    }
+    for (auto &voice : impl_->voices) impl_->release(*voice);
     impl_->voices.clear();
 }
 

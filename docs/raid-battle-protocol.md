@@ -26,6 +26,8 @@ All mutation commands use the normal authenticated command envelope and require 
 
 `role` is `mod`, `vip`, `sub`/`subscriber`, or `default`/`viewer`. The plugin assigns the weapon and damage tier. Usernames are trimmed, control characters are removed, and display is capped at 32 characters. Messages are capped at 500 characters.
 
+Each weapon tier has its own sound family: the default Blaster uses a short pulse, the Plasma Rifle uses a low energy sweep, the VIP Railgun uses a charging discharge, and the moderator Ban Hammer uses a bass-heavy impact. Runtime mixing permits one current weapon cue, one enemy cue, and one effect cue, uses priorities when they compete, and clears the mix before result stingers. The Raid tab's master-volume setting scales the bounded mix.
+
 The exact messages `break;` and `!git push --force` clear the Infinite Loop and Merge Conflict roadblocks. A fire emoji activates a bounded firewall damage zone. An ice emoji slows bug movement by 50% for five seconds.
 
 Any accepted chat participation guarantees the victory presentation. Participation and viewer count still control battle speed, density, hazards, weapon mix, and leaderboard results. A raid fails only when no valid chat action occurs during the entire window.
@@ -48,4 +50,4 @@ The status response contains the phase, HP, maximum HP, remaining time, roadbloc
 
 ## Safety and limits
 
-The plugin bounds enemies, warriors, projectiles, message sizes, usernames, viewer counts, battle duration, and result duration. Rendering uses the existing 30 fps native surface. The emergency clear hotkey and dock button immediately remove the battle, projectiles, effects, and queued work.
+The plugin bounds enemies, warriors, projectiles, audio voices, message sizes, usernames, viewer counts, battle duration, and result duration. Rendering uses the existing 30 fps native surface. The emergency clear hotkey and dock button immediately remove the battle, projectiles, effects, audio, and queued work. Audio buffers are reset, unprepared, and closed during normal cleanup and plugin shutdown.

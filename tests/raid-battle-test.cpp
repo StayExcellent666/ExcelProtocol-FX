@@ -4,6 +4,7 @@
 #include <QImage>
 #include <QJsonArray>
 #include <QPainter>
+#include <QStringList>
 #include <cmath>
 #include <iostream>
 
@@ -47,6 +48,21 @@ int main(int argc, char **argv)
     check(status.value("enemy_count").toInt() > 8, "viewer count scales enemy variation");
     battle.clear();
 
+    QStringList soundCues;
+    battle.onSound = [&soundCues](const QString &name) { soundCues.push_back(name); };
+    check(battle.start(12, 0, false), "weapon sound test raid starts");
+    soundCues.clear();
+    check(battle.chat("HammerMod", "mod", "go", 200) == "attack_queued", "mod attack accepted");
+    check(soundCues.contains("raid-shot-hammer"), "Ban Hammer has a dedicated sound cue");
+    check(battle.chat("RailVip", "vip", "go", 400) == "attack_queued", "vip attack accepted");
+    check(soundCues.contains("raid-shot-railgun"), "Railgun has a dedicated sound cue");
+    check(battle.chat("PlasmaSub", "sub", "go", 600) == "attack_queued", "sub attack accepted");
+    check(soundCues.contains("raid-shot-plasma"), "Plasma Rifle has a dedicated sound cue");
+    check(battle.chat("BlasterViewer", "viewer", "go", 800) == "attack_queued", "viewer attack accepted");
+    check(soundCues.contains("raid-shot-blaster"), "Blaster has a dedicated sound cue");
+    battle.onSound = {};
+    battle.clear();
+
     check(battle.start(34, 0, true), "test raid starts");
     for (qint64 now = 33; now < 20000; now += 33) battle.tick(now);
     battle.tick(20000);
@@ -63,6 +79,22 @@ int main(int argc, char **argv)
     const QJsonArray leaders = status.value("leaderboard").toArray();
     check(!leaders.isEmpty(), "projectile collisions record leaderboard damage");
     check(status.value("enemies_defeated").toInt() > 0, "focused enemies visibly die during the simulated raid");
+
+    battle.clear();
+    check(battle.start(1, 0, false), "projectile-finish regression raid starts");
+    qint64 finishAt = 0;
+    for (qint64 now = 50; now <= 90000 && battle.fighting(); now += 50) {
+        if (now % 200 == 0) battle.chat("HammerMod", "mod", "attack", now);
+        battle.tick(now);
+        if (!battle.fighting()) finishAt = now;
+    }
+    check(finishAt > 0 && battle.status(finishAt).value("phase").toString() == "results",
+          "final projectile enters results without corrupting raid state");
+    battle.tick(finishAt + 12000);
+    check(!battle.visible(), "result cleanup after a projectile victory is safe");
+
+    check(battle.start(34, 0, true), "preview raid restarts after regression cleanup");
+    for (qint64 now = 33; now < 23000; now += 33) battle.tick(now);
 
     QImage image(1920, 1080, QImage::Format_ARGB32);
     image.fill(Qt::transparent);

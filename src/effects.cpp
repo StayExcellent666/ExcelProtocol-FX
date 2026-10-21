@@ -567,7 +567,10 @@ void EffectManager::playRaidSound(const QString &name)
 #if defined(_WIN32) && !defined(FX_TESTING)
     if (!raidSoundsEnabled_ || !raidAudio_) return;
     static const QHash<QString, QStringList> variants{
-        {"raid-shot", {"raid-shot-1", "raid-shot-2", "raid-shot-3", "raid-shot-4"}},
+        {"raid-shot-blaster", {"raid-shot-blaster-1", "raid-shot-blaster-2"}},
+        {"raid-shot-plasma", {"raid-shot-plasma-1", "raid-shot-plasma-2"}},
+        {"raid-shot-railgun", {"raid-shot-railgun-1", "raid-shot-railgun-2"}},
+        {"raid-shot-hammer", {"raid-shot-hammer-1", "raid-shot-hammer-2"}},
         {"raid-enemy-hit", {"raid-enemy-hit-1", "raid-enemy-hit-2", "raid-enemy-hit-3"}},
         {"raid-enemy-death", {"raid-enemy-death-1", "raid-enemy-death-2", "raid-enemy-death-3"}},
         {"raid-enemy-spawn", {"raid-enemy-spawn-1", "raid-enemy-spawn-2"}},
@@ -582,7 +585,20 @@ void EffectManager::playRaidSound(const QString &name)
     if (!rawPath) return;
     const QString path = QString::fromUtf8(rawPath);
     bfree(rawPath);
-    if (!path.isEmpty()) raidAudio_->play(path);
+    QString group = name;
+    double gain = 0.34;
+    int priority = 1;
+    if (name == "raid-shot-blaster") { group = "weapon"; gain = 0.22; priority = 0; }
+    else if (name == "raid-shot-plasma") { group = "weapon"; gain = 0.24; priority = 1; }
+    else if (name == "raid-shot-railgun") { group = "weapon"; gain = 0.28; priority = 2; }
+    else if (name == "raid-shot-hammer") { group = "weapon"; gain = 0.3; priority = 3; }
+    else if (name == "raid-enemy-hit") { group = "enemy"; gain = 0.15; priority = 0; }
+    else if (name == "raid-enemy-death") { group = "enemy"; gain = 0.3; priority = 2; }
+    else if (name == "raid-enemy-spawn") { group = "enemy"; gain = 0.18; priority = 1; }
+    else if (name == "raid-victory" || name == "raid-failure" || name == "raid-start") {
+        group = "stinger"; gain = 0.38; priority = 4;
+    } else { group = "effect"; gain = 0.26; priority = 3; }
+    if (!path.isEmpty()) raidAudio_->play(path, group, gain, priority);
 #else
     Q_UNUSED(name);
 #endif

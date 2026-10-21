@@ -74,7 +74,10 @@ def echo(channels, delay: float = .09, decay: float = .25) -> None:
 def save(name: str, channels) -> None:
     left, right = channels
     peak = max(.001, *(abs(value) for value in left), *(abs(value) for value in right))
-    scale = .86 / peak
+    # Leave generous headroom in every asset. Runtime mixing adds a second
+    # limiter for overlapping cues, but quiet source material prevents even a
+    # single cue from sounding sharp at the default master volume.
+    scale = .66 / peak
     samples = array("h")
     for lvalue, rvalue in zip(left, right):
         samples.append(round(max(-1, min(1, lvalue * scale)) * 32767))
@@ -87,15 +90,38 @@ def save(name: str, channels) -> None:
         output.writeframes(samples.tobytes())
 
 
-def shot(number: int) -> None:
-    sound = buffer(.24)
-    bases = (510, 660, 420, 790)
-    base = bases[number - 1]
-    tone(sound, 0, .16, base * 2.1, base, .42, "saw", -.15)
-    tone(sound, .012, .19, base, base * .62, .34, "sine", .2)
-    noise(sound, 0, .11, .23, 100 + number, color=.6)
-    echo(sound, .055, .18)
-    save(f"raid-shot-{number}", sound)
+def weapon_shot(kind: str, number: int) -> None:
+    """Give every weapon a recognizable low-register signature."""
+    if kind == "blaster":
+        sound = buffer(.28)
+        base = (285, 330)[number - 1]
+        tone(sound, 0, .2, base * 1.4, base * .62, .38, "saw", -.18)
+        tone(sound, .018, .21, base * .72, base * .42, .3, "sine", .2)
+        noise(sound, 0, .09, .16, 100 + number, color=.62)
+        echo(sound, .065, .13)
+    elif kind == "plasma":
+        sound = buffer(.38)
+        base = (175, 205)[number - 1]
+        tone(sound, 0, .3, base, base * 1.48, .34, "sine", -.2, 18)
+        tone(sound, .025, .28, base * .7, base * 1.12, .25, "saw", .22, 9)
+        noise(sound, .02, .16, .12, 120 + number, color=.18)
+        echo(sound, .085, .18)
+    elif kind == "railgun":
+        sound = buffer(.5)
+        base = (82, 96)[number - 1]
+        tone(sound, 0, .31, base, base * 3.2, .33, "sine", -.28, 7)
+        tone(sound, .22, .2, base * 2.1, base * .7, .4, "saw", .25)
+        noise(sound, .21, .1, .2, 140 + number, color=.72)
+        echo(sound, .09, .22)
+    else:  # Ban Hammer
+        sound = buffer(.58)
+        base = (52, 61)[number - 1]
+        tone(sound, 0, .42, base * 1.4, base * .62, .58, "sine", -.08)
+        tone(sound, .006, .29, base * 4.1, base * 1.65, .31, "square", .14)
+        noise(sound, 0, .2, .31, 160 + number, color=.08)
+        noise(sound, .06, .24, .14, 170 + number, color=.55)
+        echo(sound, .12, .17)
+    save(f"raid-shot-{kind}-{number}", sound)
 
 
 def enemy_hit(number: int) -> None:
@@ -103,13 +129,13 @@ def enemy_hit(number: int) -> None:
     base = (105, 132, 86)[number - 1]
     tone(sound, 0, .19, base * 2.4, base, .5, "sine", (-.3, .2, .4)[number - 1])
     noise(sound, 0, .14, .48, 200 + number, color=.12)
-    tone(sound, .03, .12, 900 + number * 170, 260, .18, "square")
+    tone(sound, .03, .12, 330 + number * 45, 145, .13, "square")
     save(f"raid-enemy-hit-{number}", sound)
 
 
 def enemy_death(number: int) -> None:
     sound = buffer(.72)
-    base = (390, 470, 310)[number - 1]
+    base = (235, 275, 190)[number - 1]
     tone(sound, 0, .52, base * 2.2, 65 + number * 8, .5, "saw", -.2, 11)
     tone(sound, .07, .5, base, 48, .42, "sine", .25)
     for burst in range(5):
@@ -120,9 +146,9 @@ def enemy_death(number: int) -> None:
 
 def enemy_spawn(number: int) -> None:
     sound = buffer(.75)
-    base = (110, 145)[number - 1]
-    tone(sound, 0, .65, base, base * 5.2, .33, "saw", (-.25, .25)[number - 1], 7)
-    tone(sound, .2, .42, base * 2, base * 6, .31, "sine", .2)
+    base = (68, 84)[number - 1]
+    tone(sound, 0, .65, base, base * 3.4, .33, "saw", (-.25, .25)[number - 1], 7)
+    tone(sound, .2, .42, base * 1.6, base * 3.8, .28, "sine", .2)
     noise(sound, .05, .52, .2, 400 + number, color=.08)
     echo(sound, .12, .27)
     save(f"raid-enemy-spawn-{number}", sound)
@@ -131,26 +157,27 @@ def enemy_spawn(number: int) -> None:
 def main() -> None:
     start = buffer(1.45)
     noise(start, 0, .6, .2, 10, color=.04)
-    for index, note in enumerate((110, 164.81, 220, 329.63, 440)):
+    for index, note in enumerate((73.42, 110, 146.83, 220, 293.66)):
         tone(start, .12 + index * .18, .5, note, note * 1.015, .27, "saw", -.35 + index * .18)
-        tone(start, .12 + index * .18, .58, note * 2, note * 2.02, .18, "sine", .35 - index * .15)
+        tone(start, .12 + index * .18, .58, note * 1.5, note * 1.515, .15, "sine", .35 - index * .15)
     echo(start, .14, .3); save("raid-start", start)
 
-    for number in range(1, 5): shot(number)
+    for kind in ("blaster", "plasma", "railgun", "hammer"):
+        for number in range(1, 3): weapon_shot(kind, number)
     for number in range(1, 4): enemy_hit(number)
     for number in range(1, 4): enemy_death(number)
     for number in range(1, 3): enemy_spawn(number)
 
     alert = buffer(.95)
     for at in (0, .42):
-        tone(alert, at, .35, 185, 145, .43, "saw")
-        tone(alert, at, .35, 370, 290, .24, "square")
+        tone(alert, at, .35, 130, 96, .42, "saw")
+        tone(alert, at, .35, 260, 192, .2, "square")
     noise(alert, 0, .9, .09, 20, color=.08); echo(alert, .08, .18); save("raid-alert", alert)
 
     unlock = buffer(.9)
-    for index, note in enumerate((293.66, 440, 587.33, 880)):
+    for index, note in enumerate((146.83, 220, 293.66, 440)):
         tone(unlock, index * .115, .42, note, note * 1.02, .32, "sine", -.4 + index * .27)
-        tone(unlock, index * .115, .22, note * 2, note * 2.1, .12, "pulse")
+        tone(unlock, index * .115, .22, note * 1.5, note * 1.58, .1, "pulse")
     echo(unlock, .13, .3); save("raid-unlock", unlock)
 
     fire = buffer(1.0)
@@ -160,16 +187,16 @@ def main() -> None:
     tone(fire, 0, .85, 72, 118, .34, "saw"); save("raid-fire", fire)
 
     ice = buffer(1.15)
-    for index, note in enumerate((1046.5, 1318.5, 1568, 2093)):
+    for index, note in enumerate((329.63, 440, 523.25, 659.25)):
         tone(ice, index * .08, .72, note, note * .94, .25, "sine", -.55 + index * .35, 5)
     noise(ice, .02, .42, .12, 40, color=.75); echo(ice, .16, .38); save("raid-ice", ice)
 
     victory = buffer(2.35)
-    notes = (261.63, 329.63, 392, 523.25, 659.25, 783.99)
+    notes = (130.81, 164.81, 196, 261.63, 329.63, 392)
     for index, note in enumerate(notes):
         tone(victory, .08 + index * .19, .82, note, note * 1.006, .25, "saw", -.45 + index * .18)
-        tone(victory, .08 + index * .19, .9, note * 2, note * 2.008, .2, "sine", .45 - index * .16)
-    for note in (261.63, 329.63, 392, 523.25): tone(victory, 1.27, .95, note, note, .2, "sine")
+        tone(victory, .08 + index * .19, .9, note * 1.5, note * 1.506, .17, "sine", .45 - index * .16)
+    for note in (130.81, 164.81, 196, 261.63): tone(victory, 1.27, .95, note, note, .2, "sine")
     noise(victory, 1.2, .65, .1, 50, color=.2); echo(victory, .17, .32); save("raid-victory", victory)
 
     failure = buffer(1.7)

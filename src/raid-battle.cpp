@@ -285,7 +285,12 @@ QString RaidBattle::chat(const QString &rawUsername, const QString &rawRole,
     spawnAttack(username, weapon, damage, nowMs);
     if (!environmentTriggered && nowMs - lastShotSoundMs_ >= 110) {
         lastShotSoundMs_ = nowMs;
-        if (onSound) onSound("raid-shot");
+        if (onSound) {
+            if (weapon == "Ban Hammer") onSound("raid-shot-hammer");
+            else if (weapon == "Railgun") onSound("raid-shot-railgun");
+            else if (weapon == "Plasma Rifle") onSound("raid-shot-plasma");
+            else onSound("raid-shot-blaster");
+        }
     }
     return roadblock_ == Roadblock::None ? "attack_queued" : "attack_blocked";
 }
@@ -319,7 +324,7 @@ void RaidBattle::applyDamage(const QString &username, int enemyId, double damage
         ++defeatedEnemies_;
         impacts_.push_back({enemy->position, QColor(255, 55, 110), nowMs, true, enemy->visualSeed});
         if (onSound) onSound("raid-enemy-death");
-    } else if (nowMs - lastHitSoundMs_ >= 150) {
+    } else if (!username.isEmpty() && nowMs - lastHitSoundMs_ >= 190) {
         lastHitSoundMs_ = nowMs;
         if (onSound) onSound("raid-enemy-hit");
     }
@@ -409,6 +414,9 @@ bool RaidBattle::tick(qint64 nowMs)
         const double step = (projectile.weapon == "Railgun" ? 1900.0 : 1150.0) * seconds;
         if (remaining <= std::max(24.0, step)) {
             applyDamage(projectile.username, projectile.enemyId, projectile.damage, nowMs);
+            // A final hit transitions to Results and finish() clears every
+            // projectile. Do not remove the just-hit index a second time.
+            if (phase_ != Phase::Fighting) return true;
             projectiles_.removeAt(index - 1);
         } else if (remaining > 0) {
             projectile.position += delta / remaining * step;
