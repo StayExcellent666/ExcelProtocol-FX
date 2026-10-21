@@ -30,6 +30,10 @@ int main(int argc, char **argv)
     {
         fx::EffectManager manager;
         manager.setDesktopEnabled(false);
+        manager.setRaidSoundVolume(42);
+        check(manager.raidSoundVolume() == 42, "raid master volume is configurable");
+        manager.setRaidSoundVolume(140);
+        check(manager.raidSoundVolume() == 100, "raid master volume is bounded");
         check(manager.active().empty(), "no startup activation");
         for (const auto &def : manager.definitions()) {
             const QVector<fx::ActiveEffect> effects{{def.id, 42901, 0, 5000, 0.7, def.parameters}};

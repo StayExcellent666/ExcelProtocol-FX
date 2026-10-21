@@ -30,6 +30,8 @@ The exact messages `break;` and `!git push --force` clear the Infinite Loop and 
 
 Any accepted chat participation guarantees the victory presentation. Participation and viewer count still control battle speed, density, hazards, weapon mix, and leaderboard results. A raid fails only when no valid chat action occurs during the entire window.
 
+The renderer shows one warrior per incoming viewer for raids up to 48 viewers. Larger raids use 48 field units and report how many viewers each unit represents. Enemies enter from off-screen in waves, chat focuses the marked front target, and individual enemies have health, hit, death, and replacement animations.
+
 ## End or query
 
 ```json
@@ -42,7 +44,7 @@ An attempted failure result is converted to victory if the raid has accepted par
 {"type":"get_raid_status"}
 ```
 
-The status response contains the phase, HP, maximum HP, remaining time, roadblock, hazards, warrior count, interaction count, test mode, result, and Top 5 leaderboard. The dashboard should use the response acknowledgement rather than assuming that a command succeeded.
+The status response contains the phase, HP, maximum HP, remaining time, roadblock, hazards, field-unit count, viewers represented per unit, enemy count, defeated-enemy count, interaction count, test mode, result, and Top 5 leaderboard. The dashboard should use the response acknowledgement rather than assuming that a command succeeded.
 
 ## Safety and limits
 

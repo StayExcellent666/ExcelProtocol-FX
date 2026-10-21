@@ -1,4 +1,5 @@
 #include "effects.hpp"
+#include "raid-audio.hpp"
 
 #include <obs-module.h>
 #include <util/bmem.h>
@@ -24,7 +25,6 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
-#include <mmsystem.h>
 #endif
 
 namespace fx {
@@ -329,7 +329,8 @@ QImage renderEffects(const QSize &size, const QVector<ActiveEffect> &effects, qi
 }
 
 EffectManager::EffectManager(QObject *parent)
-    : QObject(parent), settings_(settingsPath(), QSettings::IniFormat), frame_(sharedFrame())
+    : QObject(parent), settings_(settingsPath(), QSettings::IniFormat), frame_(sharedFrame()),
+      raidAudio_(std::make_unique<RaidAudio>())
 {
     definitions_ = {
         {"crash", "Excellent.exe Crashed", "Fictional crash with automatic recovery.", "System", 5000, 1000, 15000, 15000, 0.65, 1, true, true, {{"style", 0}}},
@@ -347,6 +348,8 @@ EffectManager::EffectManager(QObject *parent)
     overlay_ = std::make_unique<DesktopOverlay>([this] { clear(); });
     raid_.onSound = [this](const QString &name) { playRaidSound(name); };
     loadSettings();
+    raidAudio_->setEnabled(raidSoundsEnabled_);
+    raidAudio_->setVolume(raidSoundVolume_);
     timer_.setInterval(33);
     timer_.setTimerType(Qt::PreciseTimer);
     QObject::connect(&timer_, &QTimer::timeout, this, [this] {
@@ -371,6 +374,7 @@ void EffectManager::loadSettings()
     streamEnabled_ = settings_.value("display/stream", true).toBool();
     raidEnabled_ = settings_.value("raid/enabled", true).toBool();
     raidSoundsEnabled_ = settings_.value("raid/sounds", true).toBool();
+    raidSoundVolume_ = std::clamp(settings_.value("raid/soundVolume", 70).toInt(), 0, 100);
     overallIntensity_ = clamp(settings_.value("effects/intensity", 0.7).toDouble(), 0.05, 1);
     maximumSimultaneous_ = std::clamp(settings_.value("effects/maxSimultaneous", 3).toInt(), 1, 4);
     monitorName_ = settings_.value("display/monitor").toString();
@@ -393,6 +397,7 @@ void EffectManager::saveSettings()
     settings_.setValue("display/stream", streamEnabled_);
     settings_.setValue("raid/enabled", raidEnabled_);
     settings_.setValue("raid/sounds", raidSoundsEnabled_);
+    settings_.setValue("raid/soundVolume", raidSoundVolume_);
     settings_.setValue("display/monitor", monitorName_);
     settings_.setValue("effects/intensity", overallIntensity_);
     settings_.setValue("effects/maxSimultaneous", maximumSimultaneous_);
@@ -523,9 +528,7 @@ QString EffectManager::startTestRaid(int viewers)
 void EffectManager::stopRaid()
 {
     raid_.clear();
-#if defined(_WIN32) && !defined(FX_TESTING)
-    PlaySoundW(nullptr, nullptr, 0);
-#endif
+    if (raidAudio_) raidAudio_->stop();
     tick();
     notifyChanged();
 }
@@ -541,11 +544,15 @@ void EffectManager::setRaidEnabled(bool value)
 void EffectManager::setRaidSoundsEnabled(bool value)
 {
     raidSoundsEnabled_ = value;
-    if (!value) {
-#if defined(_WIN32) && !defined(FX_TESTING)
-        PlaySoundW(nullptr, nullptr, 0);
-#endif
-    }
+    if (raidAudio_) raidAudio_->setEnabled(value);
+    saveSettings();
+    notifyChanged();
+}
+
+void EffectManager::setRaidSoundVolume(int value)
+{
+    raidSoundVolume_ = std::clamp(value, 0, 100);
+    if (raidAudio_) raidAudio_->setVolume(raidSoundVolume_);
     saveSettings();
     notifyChanged();
 }
@@ -558,14 +565,24 @@ QJsonObject EffectManager::raidStatus() const
 void EffectManager::playRaidSound(const QString &name)
 {
 #if defined(_WIN32) && !defined(FX_TESTING)
-    if (!raidSoundsEnabled_) return;
-    const QByteArray relative = "sounds/" + name.toUtf8() + ".wav";
+    if (!raidSoundsEnabled_ || !raidAudio_) return;
+    static const QHash<QString, QStringList> variants{
+        {"raid-shot", {"raid-shot-1", "raid-shot-2", "raid-shot-3", "raid-shot-4"}},
+        {"raid-enemy-hit", {"raid-enemy-hit-1", "raid-enemy-hit-2", "raid-enemy-hit-3"}},
+        {"raid-enemy-death", {"raid-enemy-death-1", "raid-enemy-death-2", "raid-enemy-death-3"}},
+        {"raid-enemy-spawn", {"raid-enemy-spawn-1", "raid-enemy-spawn-2"}},
+    };
+    QString selected = name;
+    if (variants.contains(name)) {
+        const QStringList &choices = variants[name];
+        selected = choices.at(QRandomGenerator::global()->bounded(choices.size()));
+    }
+    const QByteArray relative = "sounds/" + selected.toUtf8() + ".wav";
     char *rawPath = obs_module_file(relative.constData());
     if (!rawPath) return;
     const QString path = QString::fromUtf8(rawPath);
     bfree(rawPath);
-    if (!path.isEmpty()) PlaySoundW(reinterpret_cast<LPCWSTR>(path.utf16()), nullptr,
-                                    SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+    if (!path.isEmpty()) raidAudio_->play(path);
 #else
     Q_UNUSED(name);
 #endif
@@ -581,6 +598,7 @@ void EffectManager::publish(const QImage &image)
 void EffectManager::tick()
 {
     const qint64 now = clock_.elapsed();
+    if (raidAudio_) raidAudio_->cleanup();
     const auto oldSize = active_.size();
     const bool raidChanged = raid_.tick(now);
     active_.erase(std::remove_if(active_.begin(), active_.end(), [now](const ActiveEffect &effect) {
@@ -613,9 +631,7 @@ void EffectManager::tick()
 void EffectManager::clear()
 {
     active_.clear(); queue_.clear(); raid_.clear(); timer_.stop();
-#if defined(_WIN32) && !defined(FX_TESTING)
-    PlaySoundW(nullptr, nullptr, 0);
-#endif
+    if (raidAudio_) raidAudio_->stop();
     if (overlay_) { overlay_->hide(); overlay_->setFrame({}); }
     publish({}); notifyChanged();
 }

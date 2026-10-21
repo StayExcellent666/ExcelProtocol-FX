@@ -21,6 +21,7 @@
 #include <QScreen>
 #include <QScrollArea>
 #include <QSignalBlocker>
+#include <QSlider>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QTimer>
@@ -138,6 +139,14 @@ QWidget *FxDock::raid()
     auto *sounds = new QCheckBox("Play raid sound effects"); sounds->setChecked(manager_.raidSoundsEnabled());
     QObject::connect(sounds, &QCheckBox::toggled, this, [this](bool value) { manager_.setRaidSoundsEnabled(value); });
     layout->addWidget(sounds);
+    auto *volumeRow = new QWidget; auto *volumeLayout = new QHBoxLayout(volumeRow); volumeLayout->setContentsMargins(0, 0, 0, 0);
+    auto *volume = new QSlider(Qt::Horizontal); volume->setRange(0, 100); volume->setValue(manager_.raidSoundVolume());
+    auto *volumeValue = new QLabel(QString("%1%").arg(volume->value())); volumeValue->setMinimumWidth(42);
+    QObject::connect(volume, &QSlider::valueChanged, this, [this, volumeValue](int value) {
+        volumeValue->setText(QString("%1%").arg(value)); manager_.setRaidSoundVolume(value);
+    });
+    volumeLayout->addWidget(volume); volumeLayout->addWidget(volumeValue);
+    auto *soundForm = new QFormLayout; soundForm->addRow("Sound volume", volumeRow); layout->addLayout(soundForm);
     layout->addWidget(note("Sounds play through the Windows default output. Keep that output in OBS Desktop Audio if viewers should hear them."));
     auto *testGroup = new QGroupBox("Local raid test"); auto *testForm = new QFormLayout(testGroup);
     auto *viewers = new QSpinBox; viewers->setRange(1, 100000); viewers->setValue(manager_.settings().value("raid/testViewers", 8).toInt());

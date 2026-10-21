@@ -41,7 +41,14 @@ int main(int argc, char **argv)
     check(status.value("phase").toString() == "results" && status.value("victory").toBool(), "any participation guarantees victory");
 
     battle.clear();
-    check(battle.start(6, 0, true), "test raid starts");
+    check(battle.start(34, 0, true), "34-viewer test raid starts");
+    status = battle.status(0);
+    check(status.value("warrior_count").toInt() == 34, "every raider is represented when the raid fits the field cap");
+    check(status.value("enemy_count").toInt() > 8, "viewer count scales enemy variation");
+    battle.clear();
+
+    check(battle.start(34, 0, true), "test raid starts");
+    for (qint64 now = 33; now < 20000; now += 33) battle.tick(now);
     battle.tick(20000);
     status = battle.status(20000);
     check(status.value("roadblock").toString() == "infinite_loop", "deterministic test roadblock deployed");
@@ -55,6 +62,7 @@ int main(int argc, char **argv)
     status = battle.status(23000);
     const QJsonArray leaders = status.value("leaderboard").toArray();
     check(!leaders.isEmpty(), "projectile collisions record leaderboard damage");
+    check(status.value("enemies_defeated").toInt() > 0, "focused enemies visibly die during the simulated raid");
 
     QImage image(1920, 1080, QImage::Format_ARGB32);
     image.fill(Qt::transparent);

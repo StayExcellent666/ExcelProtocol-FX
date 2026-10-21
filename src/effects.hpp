@@ -57,6 +57,7 @@ QImage renderEffects(const QSize &size, const QVector<ActiveEffect> &effects,
                      qint64 nowMs, double overallIntensity);
 
 class DesktopOverlay;
+class RaidAudio;
 
 class EffectManager : public QObject {
 public:
@@ -77,6 +78,8 @@ public:
     void setRaidEnabled(bool value);
     bool raidSoundsEnabled() const { return raidSoundsEnabled_; }
     void setRaidSoundsEnabled(bool value);
+    int raidSoundVolume() const { return raidSoundVolume_; }
+    void setRaidSoundVolume(int value);
     QJsonObject raidStatus() const;
     QJsonObject command(const QJsonObject &request);
     void clear();
@@ -120,6 +123,7 @@ private:
     RaidBattle raid_;
     QElapsedTimer clock_;
     QTimer timer_;
+    std::unique_ptr<RaidAudio> raidAudio_;
     std::unique_ptr<DesktopOverlay> overlay_;
     std::shared_ptr<FrameState> frame_;
     QSize renderSize_{1920, 1080};
@@ -130,6 +134,7 @@ private:
     bool streamEnabled_ = true;
     bool raidEnabled_ = true;
     bool raidSoundsEnabled_ = true;
+    int raidSoundVolume_ = 70;
     bool stopped_ = false;
     double overallIntensity_ = 0.7;
     int maximumSimultaneous_ = 3;

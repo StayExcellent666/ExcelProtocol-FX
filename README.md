@@ -12,7 +12,7 @@ After installation, open **Docks > ExcelProtocol FX**. Add the `ExcelProtocol FX
 
 To use Channel Reward effects, create a one-time code from **Dashboard > Channel Rewards > ExcelProtocol FX**, then paste it into the plugin's **Connection** tab. The plugin stores its device credential in Windows Credential Manager and makes an outbound authenticated TLS connection; it opens no inbound port. Live effect commands are acknowledged, expire after ten seconds, and are never replayed after a reconnect.
 
-The **Raid** tab includes a local **TEST RAID** button, viewer-count simulation, optional sound effects, and the rules shown to chat. Production raid and chat events arrive over the paired outbound WSS connection; see [the Raid Battle protocol](docs/raid-battle-protocol.md).
+The **Raid** tab includes a local **TEST RAID** button, viewer-count simulation, a master sound-volume control, layered sound variations, and the rules shown to chat. Every viewer is represented individually through 48 viewers; larger raids use representative field units. Enemies enter in waves, take visible hits, break apart on death, and are replaced while the raid focuses the marked target. Production raid and chat events arrive over the paired outbound WSS connection; see [the Raid Battle protocol](docs/raid-battle-protocol.md).
 
 ## Updates
 
