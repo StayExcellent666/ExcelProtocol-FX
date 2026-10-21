@@ -29,7 +29,7 @@ try {
     $exitCode = $LASTEXITCODE
     $output | Set-Content -LiteralPath $log -Encoding utf8
     if ($exitCode -ne 0) { throw "OBS module-load smoke failed with exit code $exitCode. See $log" }
-    if (($output | Out-String) -notmatch 'registered its OBS video source') { throw "OBS load evidence missing. See $log" }
+    if (($output | Out-String) -notmatch 'registered its OBS audio/video source') { throw "OBS load evidence missing. See $log" }
 } finally {
     $env:PATH = $previousPath
 }
