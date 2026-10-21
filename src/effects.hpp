@@ -1,5 +1,7 @@
 #pragma once
 
+#include "raid-battle.hpp"
+
 #include <QElapsedTimer>
 #include <QImage>
 #include <QJsonObject>
@@ -69,6 +71,13 @@ public:
                     const QJsonObject &parameters = {}, const QString &origin = "dock");
     QString triggerRandom(const QString &origin = "dock");
     QString triggerChaos(const QString &origin = "dock");
+    QString startTestRaid(int viewers = 8);
+    void stopRaid();
+    bool raidEnabled() const { return raidEnabled_; }
+    void setRaidEnabled(bool value);
+    bool raidSoundsEnabled() const { return raidSoundsEnabled_; }
+    void setRaidSoundsEnabled(bool value);
+    QJsonObject raidStatus() const;
     QJsonObject command(const QJsonObject &request);
     void clear();
     void cancel(const QString &id);
@@ -100,6 +109,7 @@ private:
     EffectDefinition *definition(const QString &id);
     QString result(const QString &id, const QString &message, const QString &origin);
     bool compatible(const EffectDefinition &definition) const;
+    void playRaidSound(const QString &name);
 
     QSettings settings_;
     QVector<EffectDefinition> definitions_;
@@ -107,6 +117,7 @@ private:
     QHash<QString, qint64> lastTriggered_;
     QHash<QString, qint64> eventIds_;
     QQueue<QJsonObject> queue_;
+    RaidBattle raid_;
     QElapsedTimer clock_;
     QTimer timer_;
     std::unique_ptr<DesktopOverlay> overlay_;
@@ -117,6 +128,8 @@ private:
     bool enabled_ = true;
     bool desktopEnabled_ = true;
     bool streamEnabled_ = true;
+    bool raidEnabled_ = true;
+    bool raidSoundsEnabled_ = true;
     bool stopped_ = false;
     double overallIntensity_ = 0.7;
     int maximumSimultaneous_ = 3;

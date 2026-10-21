@@ -23,6 +23,7 @@
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QTabWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <algorithm>
 
@@ -57,6 +58,7 @@ FxDock::FxDock(EffectManager &manager, QWidget *parent) : QWidget(parent), manag
     auto *brand = new QLabel("EXCELPROTOCOL FX"); brand->setObjectName("brand"); layout->addWidget(brand);
     auto *tabs = new QTabWidget;
     tabs->addTab(scrollable(dashboard()), "Dashboard");
+    tabs->addTab(scrollable(raid()), "Raid");
     tabs->addTab(scrollable(library()), "Effects");
     tabs->addTab(scrollable(advanced()), "Advanced");
     tabs->addTab(scrollable(randomSettings()), "Random");
@@ -81,6 +83,10 @@ FxDock::FxDock(EffectManager &manager, QWidget *parent) : QWidget(parent), manag
         if (success && pairingCode_) pairingCode_->clear();
         refreshConnection();
     };
+    auto *raidRefresh = new QTimer(this);
+    raidRefresh->setInterval(500);
+    QObject::connect(raidRefresh, &QTimer::timeout, this, [this] { if (!stopped_ && raidLabel_) refresh(); });
+    raidRefresh->start();
     refresh();
     updates_->start();
     remote_->start();
@@ -117,8 +123,39 @@ QWidget *FxDock::dashboard()
     QObject::connect(maximum, &QSpinBox::valueChanged, this, [this](int value) { manager_.setMaxSimultaneous(value); });
     form->addRow("Maximum simultaneous", maximum);
     layout->addLayout(form);
-    layout->addWidget(note("All ExcelProtocol FX effects are visual and silent."));
+    layout->addWidget(note("The standard effect library is silent. Raid Battle has optional sound effects in its own tab."));
     layout->addStretch(); return widget;
+}
+
+QWidget *FxDock::raid()
+{
+    auto *widget = new QWidget; auto *layout = new QVBoxLayout(widget);
+    layout->addWidget(note("Twitch Raid Battle turns an incoming raid into a three-minute cyber-defense game. Any valid chat participation guarantees victory; only a completely inactive raid can fail. Viewer count and participation determine the horde size, health, weapons, hazards, and battle pace."));
+    raidLabel_ = note("Raid status: idle"); layout->addWidget(raidLabel_);
+    auto *enabled = new QCheckBox("Enable Twitch Raid Battle"); enabled->setChecked(manager_.raidEnabled());
+    QObject::connect(enabled, &QCheckBox::toggled, this, [this](bool value) { manager_.setRaidEnabled(value); refresh(); });
+    layout->addWidget(enabled);
+    auto *sounds = new QCheckBox("Play raid sound effects"); sounds->setChecked(manager_.raidSoundsEnabled());
+    QObject::connect(sounds, &QCheckBox::toggled, this, [this](bool value) { manager_.setRaidSoundsEnabled(value); });
+    layout->addWidget(sounds);
+    layout->addWidget(note("Sounds play through the Windows default output. Keep that output in OBS Desktop Audio if viewers should hear them."));
+    auto *testGroup = new QGroupBox("Local raid test"); auto *testForm = new QFormLayout(testGroup);
+    auto *viewers = new QSpinBox; viewers->setRange(1, 100000); viewers->setValue(manager_.settings().value("raid/testViewers", 8).toInt());
+    QObject::connect(viewers, &QSpinBox::valueChanged, this, [this](int value) { manager_.settings().setValue("raid/testViewers", value); manager_.settings().sync(); });
+    testForm->addRow("Raid viewers", viewers);
+    auto *buttons = new QWidget; auto *buttonLayout = new QHBoxLayout(buttons); buttonLayout->setContentsMargins(0, 0, 0, 0);
+    testRaidButton_ = new QPushButton("TEST RAID"); stopRaidButton_ = new QPushButton("Stop Raid");
+    buttonLayout->addWidget(testRaidButton_); buttonLayout->addWidget(stopRaidButton_); testForm->addRow(buttons);
+    QObject::connect(testRaidButton_, &QPushButton::clicked, this, [this, viewers] { manager_.startTestRaid(viewers->value()); refresh(); });
+    QObject::connect(stopRaidButton_, &QPushButton::clicked, this, [this] { manager_.stopRaid(); refresh(); });
+    testForm->addRow(note("Test mode generates simulated chatters, role-based weapons, fire and ice emotes, a random roadblock, and a Top 5 scoreboard. It uses the same native renderer shown on the desktop and the OBS source."));
+    layout->addWidget(testGroup);
+    auto *rules = new QGroupBox("Chat rules"); auto *rulesLayout = new QVBoxLayout(rules);
+    rulesLayout->addWidget(note("MOD: Ban Hammer (50 damage)\nVIP: Railgun (35 damage)\nSUB: Plasma Rifle (20 damage)\nEveryone else: Blaster (10 damage)\n\n🔥 creates a damaging firewall. ❄️ slows bugs by 50% for five seconds. Type break; for an Infinite Loop or !git push --force for a Merge Conflict."));
+    layout->addWidget(rules);
+    layout->addStretch();
+    refresh();
+    return widget;
 }
 
 QWidget *FxDock::library()
@@ -350,5 +387,20 @@ void FxDock::refresh()
         activeLabel_->setText(names.isEmpty() ? "Active effects: none" : "Active effects: " + names.join(", "));
     }
     if (displayLabel_) displayLabel_->setText(manager_.displayDescription());
+    if (raidLabel_) {
+        const QJsonObject raid = manager_.raidStatus();
+        const QString phase = raid.value("phase").toString();
+        if (phase == "fighting") {
+            const int seconds = (raid.value("remaining_ms").toInt() + 999) / 1000;
+            raidLabel_->setText(QString("Raid status: fighting // %1 / %2 HP // %3:%4 remaining // %5 interactions")
+                .arg(raid.value("hp").toInt()).arg(raid.value("max_hp").toInt())
+                .arg(seconds / 60).arg(seconds % 60, 2, 10, QLatin1Char('0')).arg(raid.value("interaction_count").toInt()));
+        } else if (phase == "results") {
+            raidLabel_->setText(raid.value("victory").toBool() ? "Raid status: victory - code secured" : "Raid status: no activity - compilation failed");
+        } else raidLabel_->setText("Raid status: idle");
+        const bool fighting = phase == "fighting";
+        if (testRaidButton_) testRaidButton_->setEnabled(manager_.enabled() && manager_.raidEnabled() && !fighting);
+        if (stopRaidButton_) stopRaidButton_->setEnabled(phase != "idle");
+    }
 }
 } // namespace fx

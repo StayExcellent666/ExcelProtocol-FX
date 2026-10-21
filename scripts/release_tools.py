@@ -16,9 +16,11 @@ VERSION = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-bet
 REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/ExcelProtocol-FX$")
 DLL = "obs-plugins/64bit/excelprotocol-fx.dll"
 DATA = "data/obs-plugins/excelprotocol-fx/"
+SOUNDS = tuple(DATA + "sounds/" + name + ".wav" for name in
+               ("raid-start", "raid-shot", "raid-alert", "raid-unlock", "raid-fire", "raid-ice", "raid-victory", "raid-failure"))
 REQUIRED = (DLL, DATA + "excelprotocol-fx-updater.exe", DATA + "locale/en-US.ini",
-            DATA + "tls/qschannelbackend.dll")
-QA_CHECKS = ("native_plugin_load", "desktop_and_obs_effects", "settings_persistence", "websocket_authentication", "installer_clean_install", "installer_upgrade_rollback", "installer_obs_running_refusal", "uninstall_preserves_obs", "stable_beta_update_selection", "update_digest_rejection", "update_after_obs_exit", "performance_and_panic_stop")
+            DATA + "tls/qschannelbackend.dll", *SOUNDS)
+QA_CHECKS = ("native_plugin_load", "desktop_and_obs_effects", "raid_battle_gameplay_and_audio", "settings_persistence", "websocket_authentication", "installer_clean_install", "installer_upgrade_rollback", "installer_obs_running_refusal", "uninstall_preserves_obs", "stable_beta_update_selection", "update_digest_rejection", "update_after_obs_exit", "performance_and_panic_stop")
 
 
 def version_info(value: str) -> tuple[str, str]:
@@ -72,6 +74,10 @@ def stage_files(stage: Path) -> list[Path]:
     for path in files:
         if path.suffix.lower() in (".dll", ".exe"):
             check_pe(path)
+        elif path.suffix.lower() == ".wav":
+            header = path.read_bytes()[:12]
+            if len(header) != 12 or header[:4] != b"RIFF" or header[8:] != b"WAVE":
+                raise ValueError(f"Invalid WAV audio asset: {path}")
     if len({str(p.relative_to(stage)).casefold() for p in files}) != len(files):
         raise ValueError("Case-insensitive duplicate installation paths")
     return sorted(files)

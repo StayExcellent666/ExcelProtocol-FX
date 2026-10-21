@@ -2,7 +2,7 @@
 
 ExcelProtocol FX is a native Windows x64 plugin for OBS Studio 32.2.2 through 32.x. It renders the same seeded animation frame in a click-through desktop overlay and in an `ExcelProtocol FX` OBS source, so stream viewers and the streamer see synchronized effects.
 
-The plugin includes ten procedural effects, weighted random and constrained chaos modes, duration/cooldown/intensity limits, a bounded command API, a dock, monitor selection, persistent settings, secure ExcelProtocol Channel Reward triggers, and clear-all hotkeys. It does not inject into games, manipulate input, modify a game renderer, or claim support over exclusive-fullscreen games. Use borderless or windowed display mode when the desktop overlay must remain visible.
+The plugin includes ten procedural effects, a native Twitch Raid Battle, weighted random and constrained chaos modes, duration/cooldown/intensity limits, a bounded command API, a dock, monitor selection, persistent settings, secure ExcelProtocol Channel Reward triggers, and clear-all hotkeys. It does not inject into games, manipulate input, modify a game renderer, or claim support over exclusive-fullscreen games. Use borderless or windowed display mode when the desktop overlay must remain visible.
 
 ## Install
 
@@ -11,6 +11,8 @@ Download the Windows x64 setup executable from the matching GitHub Release and c
 After installation, open **Docks > ExcelProtocol FX**. Add the `ExcelProtocol FX` source above gameplay in each scene that should show stream effects. The desktop overlay and stream source can be enabled independently. `Ctrl+Shift+F12` clears every effect globally; an OBS hotkey with the same purpose is also available.
 
 To use Channel Reward effects, create a one-time code from **Dashboard > Channel Rewards > ExcelProtocol FX**, then paste it into the plugin's **Connection** tab. The plugin stores its device credential in Windows Credential Manager and makes an outbound authenticated TLS connection; it opens no inbound port. Live effect commands are acknowledged, expire after ten seconds, and are never replayed after a reconnect.
+
+The **Raid** tab includes a local **TEST RAID** button, viewer-count simulation, optional sound effects, and the rules shown to chat. Production raid and chat events arrive over the paired outbound WSS connection; see [the Raid Battle protocol](docs/raid-battle-protocol.md).
 
 ## Updates
 
@@ -44,6 +46,6 @@ The release workflow uses the repository-scoped `GITHUB_TOKEN` with `contents: w
 
 ## Integration status
 
-Version 1.1.0 pairs with the ExcelProtocol dashboard over HTTPS and connects to the production bot using an outbound authenticated TLS WebSocket. Remote commands dispatch into the same bounded effect manager used by local previews. The plugin advertises command, effect-library, and status capabilities, answers correlated requests, sends heartbeats, uses progressive full-jitter reconnects, rejects expired or duplicate mutations, and never queues live commands across a disconnect.
+Version 1.1.0 pairs with the ExcelProtocol dashboard over HTTPS and connects to the production bot using an outbound authenticated TLS WebSocket. Remote commands dispatch into the same bounded effect and Raid Battle manager used by local previews. The plugin advertises command, effect-library, status, and `raid_battle.v1` capabilities, answers correlated requests, sends heartbeats, uses progressive full-jitter reconnects, rejects expired or duplicate mutations, and never queues live commands across a disconnect.
 
 Licensed under GPL-2.0-or-later; see [LICENSE](LICENSE).

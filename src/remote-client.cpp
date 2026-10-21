@@ -443,7 +443,7 @@ bool RemoteClient::consumeUpgradeResponse()
         return false;
     }
     upgraded_ = true;
-    QJsonArray capabilities{"commands.v1", "effects.list.v1", "effects.status.v1"};
+    QJsonArray capabilities{"commands.v1", "effects.list.v1", "effects.status.v1", "raid_battle.v1"};
     sendJson({
         {"protocol", protocolName}, {"protocol_version", 1}, {"type", "hello"},
         {"device_id", deviceId_}, {"plugin_version", FX_VERSION},

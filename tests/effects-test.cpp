@@ -85,6 +85,15 @@ int main(int argc, char **argv)
         check(inkMetadata.value("drips").toObject().value("default").isBool(), "drips default is boolean");
         check(inkMetadata.value("opacity").toObject().value("default").toDouble() == 1.0, "full opacity default is valid");
         check(inkMetadata.value("size").toObject().value("control") == "range", "ink size is exposed as a slider");
+        const auto raidStart = manager.command({{"type", "raid_start"}, {"event_id", "raid-1"}, {"viewers", 12}});
+        check(raidStart.value("status") == "raid_started", "remote raid starts");
+        check(manager.command({{"type", "raid_start"}, {"event_id", "raid-2"}, {"viewers", 0}}).value("status") == "invalid_raid_viewers", "raid viewer bounds enforced");
+        const auto raidChat = manager.command({{"type", "raid_chat"}, {"event_id", "raid-3"}, {"username", "Coder"}, {"role", "vip"}, {"message", "hello"}});
+        check(raidChat.value("ok").toBool(), "remote raid chat accepted");
+        check(manager.command({{"type", "get_raid_status"}}).value("raid").toObject().value("interaction_count").toInt() == 1, "raid status reports interaction");
+        const auto raidEnd = manager.command({{"type", "raid_end"}, {"event_id", "raid-4"}, {"victory", false}});
+        check(raidEnd.value("status") == "raid_victory", "engaged raid cannot be forced to lose");
+        manager.stopRaid();
         manager.shutdown();
         check(manager.trigger("fog") == "disabled", "shutdown blocks activation");
     }

@@ -28,6 +28,7 @@ Windows x64 OBS Studio plugin release from commit `{args.commit}` ({channel} cha
 
 - Native OBS source and synchronized click-through desktop overlay.
 - Built-in procedural effect library with cooldowns, duration limits, intensity controls, and emergency clear.
+- Native Twitch Raid Battle with role-based weapons, roadblocks, hazards, Top 5 results, optional sounds, and a local test button.
 - Installer and portable ZIP for OBS Studio 32.2.2 through 32.x.
 - Stable/beta update checks and opt-in verified installation after OBS closes.
 - `SHA256SUMS.txt` and `update-manifest.json` for machine verification.

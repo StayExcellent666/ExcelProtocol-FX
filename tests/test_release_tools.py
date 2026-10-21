@@ -6,6 +6,7 @@ import os
 import struct
 import subprocess
 import tempfile
+import time
 import unittest
 
 SPEC = importlib.util.spec_from_file_location("release_tools", Path(__file__).parents[1] / "scripts/release_tools.py")
@@ -36,11 +37,24 @@ class ReleaseTests(unittest.TestCase):
         locale.parent.mkdir(parents=True)
         locale.write_text('Name="ExcelProtocol FX"', encoding="utf-8")
         pe(self.stage / release.REQUIRED[3])
+        for sound in release.SOUNDS:
+            path = self.stage / sound
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"RIFF\x04\x00\x00\x00WAVE")
         pe(self.output / "ExcelProtocol-FX-1.0.0-windows-x64-setup.exe", 0x14C)
         self.commit = "a" * 40
 
     def tearDown(self):
-        self.temp.cleanup()
+        # A just-exited portable Git process can briefly retain its Windows
+        # working-directory handle. Retry the cleanup without hiding a lasting failure.
+        for attempt in range(20):
+            try:
+                self.temp.cleanup()
+                return
+            except PermissionError:
+                if attempt == 19:
+                    raise
+                time.sleep(0.05)
 
     def build(self):
         return release.package(self.stage, self.output, "1.0.0", "example/ExcelProtocol-FX", self.commit)
@@ -93,6 +107,16 @@ class ReleaseTests(unittest.TestCase):
 
     def test_missing_tls_backend_rejected(self):
         (self.stage / release.REQUIRED[3]).unlink()
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_missing_raid_sound_rejected(self):
+        (self.stage / release.SOUNDS[0]).unlink()
+        with self.assertRaises(ValueError):
+            self.build()
+
+    def test_invalid_raid_sound_rejected(self):
+        (self.stage / release.SOUNDS[0]).write_bytes(b"not wave audio")
         with self.assertRaises(ValueError):
             self.build()
 

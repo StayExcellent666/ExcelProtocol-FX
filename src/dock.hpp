@@ -20,6 +20,7 @@ public:
     void refresh();
 private:
     QWidget *dashboard();
+    QWidget *raid();
     QWidget *library();
     QWidget *advanced();
     QWidget *randomSettings();
@@ -33,6 +34,7 @@ private:
     UpdateController *updates_ = nullptr;
     QLabel *activeLabel_ = nullptr;
     QLabel *resultLabel_ = nullptr;
+    QLabel *raidLabel_ = nullptr;
     QLabel *displayLabel_ = nullptr;
     QComboBox *monitors_ = nullptr;
     QLabel *connectionLabel_ = nullptr;
@@ -42,6 +44,8 @@ private:
     QPushButton *pairButton_ = nullptr;
     QPushButton *reconnectButton_ = nullptr;
     QPushButton *forgetButton_ = nullptr;
+    QPushButton *testRaidButton_ = nullptr;
+    QPushButton *stopRaidButton_ = nullptr;
     bool stopped_ = false;
 };
 } // namespace fx

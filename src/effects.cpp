@@ -24,6 +24,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <mmsystem.h>
 #endif
 
 namespace fx {
@@ -344,6 +345,7 @@ EffectManager::EffectManager(QObject *parent)
     };
     clock_.start();
     overlay_ = std::make_unique<DesktopOverlay>([this] { clear(); });
+    raid_.onSound = [this](const QString &name) { playRaidSound(name); };
     loadSettings();
     timer_.setInterval(33);
     timer_.setTimerType(Qt::PreciseTimer);
@@ -367,6 +369,8 @@ void EffectManager::loadSettings()
     enabled_ = settings_.value("effects/enabled", true).toBool();
     desktopEnabled_ = settings_.value("display/desktop", true).toBool();
     streamEnabled_ = settings_.value("display/stream", true).toBool();
+    raidEnabled_ = settings_.value("raid/enabled", true).toBool();
+    raidSoundsEnabled_ = settings_.value("raid/sounds", true).toBool();
     overallIntensity_ = clamp(settings_.value("effects/intensity", 0.7).toDouble(), 0.05, 1);
     maximumSimultaneous_ = std::clamp(settings_.value("effects/maxSimultaneous", 3).toInt(), 1, 4);
     monitorName_ = settings_.value("display/monitor").toString();
@@ -387,6 +391,8 @@ void EffectManager::saveSettings()
     settings_.setValue("effects/enabled", enabled_);
     settings_.setValue("display/desktop", desktopEnabled_);
     settings_.setValue("display/stream", streamEnabled_);
+    settings_.setValue("raid/enabled", raidEnabled_);
+    settings_.setValue("raid/sounds", raidSoundsEnabled_);
     settings_.setValue("display/monitor", monitorName_);
     settings_.setValue("effects/intensity", overallIntensity_);
     settings_.setValue("effects/maxSimultaneous", maximumSimultaneous_);
@@ -505,6 +511,66 @@ QString EffectManager::triggerChaos(const QString &origin)
     return result("chaos", triggered ? QString("triggered_%1").arg(triggered) : "no_available_effect", origin);
 }
 
+QString EffectManager::startTestRaid(int viewers)
+{
+    if (stopped_ || !enabled_ || !raidEnabled_) return result("raid", "disabled", "dock");
+    if (!raid_.start(viewers, clock_.elapsed(), true)) return result("raid", "raid_active", "dock");
+    timer_.start();
+    notifyChanged();
+    return result("raid", "raid_started", "dock");
+}
+
+void EffectManager::stopRaid()
+{
+    raid_.clear();
+#if defined(_WIN32) && !defined(FX_TESTING)
+    PlaySoundW(nullptr, nullptr, 0);
+#endif
+    tick();
+    notifyChanged();
+}
+
+void EffectManager::setRaidEnabled(bool value)
+{
+    raidEnabled_ = value;
+    if (!value) stopRaid();
+    saveSettings();
+    notifyChanged();
+}
+
+void EffectManager::setRaidSoundsEnabled(bool value)
+{
+    raidSoundsEnabled_ = value;
+    if (!value) {
+#if defined(_WIN32) && !defined(FX_TESTING)
+        PlaySoundW(nullptr, nullptr, 0);
+#endif
+    }
+    saveSettings();
+    notifyChanged();
+}
+
+QJsonObject EffectManager::raidStatus() const
+{
+    return raid_.status(clock_.elapsed());
+}
+
+void EffectManager::playRaidSound(const QString &name)
+{
+#if defined(_WIN32) && !defined(FX_TESTING)
+    if (!raidSoundsEnabled_) return;
+    const QByteArray relative = "sounds/" + name.toUtf8() + ".wav";
+    char *rawPath = obs_module_file(relative.constData());
+    if (!rawPath) return;
+    const QString path = QString::fromUtf8(rawPath);
+    bfree(rawPath);
+    if (!path.isEmpty()) PlaySoundW(reinterpret_cast<LPCWSTR>(path.utf16()), nullptr,
+                                    SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+#else
+    Q_UNUSED(name);
+#endif
+}
+
 void EffectManager::publish(const QImage &image)
 {
     std::lock_guard<std::mutex> guard(frame_->mutex);
@@ -516,28 +582,40 @@ void EffectManager::tick()
 {
     const qint64 now = clock_.elapsed();
     const auto oldSize = active_.size();
+    const bool raidChanged = raid_.tick(now);
     active_.erase(std::remove_if(active_.begin(), active_.end(), [now](const ActiveEffect &effect) {
         return now - effect.startedMs >= std::min(effect.durationMs, maxDuration);
     }), active_.end());
-    if (active_.isEmpty()) {
+    if (active_.isEmpty() && !raid_.visible()) {
         timer_.stop(); overlay_->hide(); overlay_->setFrame({}); publish({});
         if (!queue_.isEmpty()) {
             const auto next = queue_.dequeue();
             trigger(next.value("effect").toString(), next.value("duration_ms").toInt(-1), next.value("intensity").toDouble(-1), next.value("parameters").toObject(), "queue");
         }
     } else {
-        const QImage image = renderEffects(renderSize_, active_, now, overallIntensity_);
+        QImage image = active_.isEmpty() ? QImage(renderSize_, QImage::Format_ARGB32)
+                                        : renderEffects(renderSize_, active_, now, overallIntensity_);
         if (image.isNull()) { clear(); return; }
+        if (active_.isEmpty()) image.fill(Qt::transparent);
+        if (raid_.visible()) {
+            QPainter painter(&image);
+            painter.setRenderHint(QPainter::Antialiasing);
+            painter.scale(renderSize_.width() / 1920.0, renderSize_.height() / 1080.0);
+            raid_.paint(painter, now);
+        }
         publish(image);
         if (desktopEnabled_) { overlay_->setFrame(image); if (!overlay_->isVisible()) overlay_->show(); }
         else overlay_->hide();
     }
-    if (active_.size() != oldSize) notifyChanged();
+    if (active_.size() != oldSize || raidChanged) notifyChanged();
 }
 
 void EffectManager::clear()
 {
-    active_.clear(); queue_.clear(); timer_.stop();
+    active_.clear(); queue_.clear(); raid_.clear(); timer_.stop();
+#if defined(_WIN32) && !defined(FX_TESTING)
+    PlaySoundW(nullptr, nullptr, 0);
+#endif
     if (overlay_) { overlay_->hide(); overlay_->setFrame({}); }
     publish({}); notifyChanged();
 }
@@ -557,8 +635,8 @@ void EffectManager::shutdown()
 
 void EffectManager::notifyChanged() { if (onChanged) onChanged(); }
 void EffectManager::setEnabled(bool value) { enabled_ = value; if (!value) clear(); saveSettings(); notifyChanged(); }
-void EffectManager::setDesktopEnabled(bool value) { desktopEnabled_ = value; if (!active_.isEmpty()) tick(); else if (!value && overlay_) overlay_->hide(); saveSettings(); notifyChanged(); }
-void EffectManager::setStreamEnabled(bool value) { streamEnabled_ = value; if (!active_.isEmpty()) tick(); else publish({}); saveSettings(); notifyChanged(); }
+void EffectManager::setDesktopEnabled(bool value) { desktopEnabled_ = value; if (!active_.isEmpty() || raid_.visible()) tick(); else if (!value && overlay_) overlay_->hide(); saveSettings(); notifyChanged(); }
+void EffectManager::setStreamEnabled(bool value) { streamEnabled_ = value; if (!active_.isEmpty() || raid_.visible()) tick(); else publish({}); saveSettings(); notifyChanged(); }
 void EffectManager::setOverallIntensity(double value) { overallIntensity_ = clamp(value, 0.05, 1); saveSettings(); }
 void EffectManager::setMaxSimultaneous(int value) { maximumSimultaneous_ = std::clamp(value, 1, 4); clear(); saveSettings(); }
 void EffectManager::setMonitorName(const QString &value) { monitorName_ = value; clear(); applyDisplaySettings(); saveSettings(); }
@@ -575,7 +653,7 @@ void EffectManager::applyDisplaySettings()
     renderSize_ = pixels.scaled(QSize(2560, 1440), Qt::KeepAspectRatio);
     if (pixels.width() <= 2560 && pixels.height() <= 1440) renderSize_ = pixels;
     frame_->width.store(static_cast<unsigned>(renderSize_.width())); frame_->height.store(static_cast<unsigned>(renderSize_.height()));
-    if (!active_.isEmpty()) tick();
+    if (!active_.isEmpty() || raid_.visible()) tick();
     notifyChanged();
 }
 
@@ -590,7 +668,8 @@ QJsonObject EffectManager::command(const QJsonObject &request)
     Q_ASSERT(QThread::currentThread() == thread());
     const QString type = request.value("type").toString();
     const QString eventId = request.value("event_id").toString();
-    const bool mutation = type == "trigger_effect" || type == "trigger_random" || type == "clear_effects" || type == "cancel_effect";
+    const bool mutation = type == "trigger_effect" || type == "trigger_random" || type == "clear_effects"
+        || type == "cancel_effect" || type == "raid_start" || type == "raid_chat" || type == "raid_end";
     auto reply = [&](bool ok, const QString &status) { return QJsonObject{{"ok", ok}, {"status", status}, {"event_id", eventId}}; };
     if (mutation) {
         if (eventId.isEmpty() || eventId.size() > 128) return reply(false, "invalid_event_id");
@@ -614,6 +693,33 @@ QJsonObject EffectManager::command(const QJsonObject &request)
     if (type == "trigger_random") { const auto status = triggerRandom("integration"); return reply(status == "triggered", status); }
     if (type == "clear_effects") { clear(); return reply(true, "cleared"); }
     if (type == "cancel_effect") { if (!definition(request.value("effect").toString())) return reply(false, "unknown_effect"); cancel(request.value("effect").toString()); return reply(true, "cancelled"); }
+    if (type == "raid_start") {
+        if (!raidEnabled_ || !enabled_) return reply(false, "disabled");
+        const QJsonValue viewers = request.value("viewers");
+        if (!viewers.isDouble() || viewers.toDouble() != viewers.toInt() || viewers.toInt() < 1 || viewers.toInt() > 1000000)
+            return reply(false, "invalid_raid_viewers");
+        if (!raid_.start(viewers.toInt(), clock_.elapsed(), false)) return reply(false, "raid_active");
+        timer_.start(); notifyChanged();
+        QJsonObject response = reply(true, "raid_started"); response.insert("raid", raidStatus()); return response;
+    }
+    if (type == "raid_chat") {
+        if (!request.value("username").isString() || !request.value("role").isString() || !request.value("message").isString())
+            return reply(false, "invalid_raid_chat");
+        const QString status = raid_.chat(request.value("username").toString(), request.value("role").toString(),
+                                          request.value("message").toString(), clock_.elapsed());
+        const bool accepted = status == "attack_queued" || status == "attack_blocked" || status == "roadblock_cleared";
+        QJsonObject response = reply(accepted, status); response.insert("raid", raidStatus()); return response;
+    }
+    if (type == "raid_end") {
+        if (!request.value("victory").isBool()) return reply(false, "invalid_raid_result");
+        const QJsonObject before = raidStatus();
+        if (before.value("phase").toString() != "fighting") return reply(false, "no_active_raid");
+        const bool engaged = before.value("interaction_count").toInt() > 0;
+        if (!raid_.finish(request.value("victory").toBool() || engaged, clock_.elapsed())) return reply(false, "raid_still_active");
+        notifyChanged();
+        QJsonObject response = reply(true, engaged || request.value("victory").toBool() ? "raid_victory" : "raid_failed");
+        response.insert("raid", raidStatus()); return response;
+    }
     if (type == "get_active_effects") {
         QJsonArray values;
         for (const auto &effect : active_) values.push_back(QJsonObject{{"effect", effect.id}, {"remaining_ms", std::max<qint64>(0, effect.durationMs - (clock_.elapsed() - effect.startedMs))}, {"intensity", effect.intensity}});
@@ -647,6 +753,7 @@ QJsonObject EffectManager::command(const QJsonObject &request)
         return {{"ok", true}, {"effects", values}};
     }
     if (type == "get_status") return {{"ok", true}, {"enabled", enabled_}, {"active_count", static_cast<int>(active_.size())}, {"queued_count", static_cast<int>(queue_.size())}, {"desktop", desktopEnabled_}, {"stream", streamEnabled_}, {"source_count", frame_->sourceCount.load()}};
+    if (type == "get_raid_status") return {{"ok", true}, {"raid", raidStatus()}};
     return reply(false, "unknown_command");
 }
 
