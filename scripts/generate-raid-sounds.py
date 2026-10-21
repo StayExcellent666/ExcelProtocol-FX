@@ -71,13 +71,18 @@ def echo(channels, delay: float = .09, decay: float = .25) -> None:
         right[index] += source_l[index - offset] * decay
 
 
-def save(name: str, channels) -> None:
+def save(name: str, channels, target_peak: float = .66, compress: bool = False) -> None:
     left, right = channels
+    if compress:
+        # Music has many sustained layers. Gentle saturation raises its body and
+        # keeps isolated drum transients from forcing the whole song quiet.
+        left[:] = [math.tanh(value * .9) for value in left]
+        right[:] = [math.tanh(value * .9) for value in right]
     peak = max(.001, *(abs(value) for value in left), *(abs(value) for value in right))
     # Leave generous headroom in every asset. Runtime mixing adds a second
     # limiter for overlapping cues, but quiet source material prevents even a
     # single cue from sounding sharp at the default master volume.
-    scale = .66 / peak
+    scale = target_peak / peak
     samples = array("h")
     for lvalue, rvalue in zip(left, right):
         samples.append(round(max(-1, min(1, lvalue * scale)) * 32767))
@@ -155,7 +160,7 @@ def enemy_spawn(number: int) -> None:
 
 
 def synthwave_battle() -> None:
-    """Build a seamless eight-bar synthwave loop at 120 BPM."""
+    """Build a melodic, seamless eight-bar synthwave loop at 120 BPM."""
     music = buffer(16.0)
     beat = .5
     # E minor, C major, G major, D major. Two passes make an eight-bar loop.
@@ -169,44 +174,52 @@ def synthwave_battle() -> None:
         start = bar * 4 * beat
         root, chord = chords[bar % len(chords)]
 
-        # Wide analog pads carry the progression without crowding combat cues.
+        # Wide analog pads establish a clear four-chord progression.
         for note_index, note in enumerate(chord):
-            tone(music, start, 1.94, note, note * 1.002, .075, "saw",
+            tone(music, start, 1.94, note, note * 1.002, .05, "saw",
                  -.55 + note_index * .55, 3.5 + note_index)
-            tone(music, start, 1.96, note / 2, note / 2, .075, "sine",
+            tone(music, start, 1.96, note / 2, note / 2, .06, "sine",
                  .45 - note_index * .45)
 
-        # Pulsing octave bass and a moving sixteenth-note neon arpeggio.
+        # A strong octave bass pulse and one-bar neon arpeggio define the groove.
         for step in range(4):
             at = start + step * beat
             bass = root * (2 if step == 3 else 1)
-            tone(music, at, .42, bass, bass * .985, .34, "saw", -.08)
-            tone(music, at, .45, root / 2, root / 2, .26, "sine", .08)
+            tone(music, at, .42, bass, bass * .985, .25, "saw", -.08)
+            tone(music, at, .45, root / 2, root / 2, .24, "sine", .08)
         arp = (chord[0], chord[1], chord[2], chord[1], chord[0] * 2, chord[2], chord[1], chord[2])
-        for step in range(16):
-            note = arp[step % len(arp)] * (1.0 if step < 8 else 1.5)
+        for step in range(8):
+            note = arp[step]
             tone(music, start + step * beat / 2, .19, note, note * 1.01,
-                 .10, "pulse", -.65 + (step % 4) * .43)
+                 .075, "pulse", -.62 + (step % 4) * .41)
 
         # Four-on-the-floor kick, gated snare and alternating hats.
         for step in range(4):
             at = start + step * beat
-            tone(music, at, .22, 96, 43, .55, "sine")
-            noise(music, at, .055, .16, 700 + bar * 8 + step, color=.72)
+            tone(music, at, .22, 96, 43, .66, "sine")
+            noise(music, at, .055, .2, 700 + bar * 8 + step, color=.72)
             if step in (1, 3):
-                noise(music, at, .19, .34, 800 + bar * 8 + step, color=.2)
-                tone(music, at, .13, 185, 118, .13, "square")
-            noise(music, at + beat / 2, .07, .12, 900 + bar * 8 + step,
+                noise(music, at, .19, .42, 800 + bar * 8 + step, color=.2)
+                tone(music, at, .13, 185, 118, .18, "square")
+            noise(music, at + beat / 2, .07, .15, 900 + bar * 8 + step,
                   pan=-.35 if step % 2 else .35, color=.86)
 
-    # A restrained heroic hook enters on the second half of each pass.
-    hook = (329.63, 392.00, 493.88, 440.00, 392.00, 329.63, 293.66, 246.94)
-    for section in (4.0, 12.0):
+        # The lead is present from the first bar, so the loop reads as music
+        # immediately instead of as an ambient bed beneath combat sounds.
+        hooks = (
+            (329.63, 392.00, 493.88, 392.00, 329.63, 293.66, 329.63, 392.00),
+            (329.63, 392.00, 523.25, 493.88, 392.00, 329.63, 293.66, 329.63),
+            (293.66, 392.00, 493.88, 587.33, 493.88, 392.00, 293.66, 246.94),
+            (369.99, 440.00, 587.33, 440.00, 369.99, 329.63, 293.66, 220.00),
+        )
+        hook = hooks[bar % len(hooks)]
         for index, note in enumerate(hook):
-            at = section + index * beat / 2
-            tone(music, at, .38, note, note * 1.004, .16, "saw", .18, 5)
-            tone(music, at, .4, note / 2, note / 2, .08, "sine", -.2)
-    save("raid-battle-music", music)
+            at = start + .08 + index * beat / 2
+            tone(music, at, .21, note, note * 1.003, .24, "saw", .2, 4.5)
+            tone(music, at, .23, note / 2, note / 2, .13, "sine", -.2)
+
+    echo(music, .125, .12)
+    save("raid-battle-music", music, target_peak=.84, compress=True)
 
 
 def main() -> None:

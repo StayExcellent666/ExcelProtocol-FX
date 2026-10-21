@@ -598,23 +598,23 @@ void EffectManager::playRaidSound(const QString &name)
     QString group = name;
     double gain = 0.34;
     int priority = 1;
-    if (name == "raid-shot-blaster") { group = "weapon"; gain = 0.22; priority = 0; }
-    else if (name == "raid-shot-plasma") { group = "weapon"; gain = 0.24; priority = 1; }
-    else if (name == "raid-shot-railgun") { group = "weapon"; gain = 0.28; priority = 2; }
-    else if (name == "raid-shot-hammer") { group = "weapon"; gain = 0.3; priority = 3; }
-    else if (name == "raid-enemy-hit") { group = "enemy"; gain = 0.15; priority = 0; }
-    else if (name == "raid-enemy-death") { group = "enemy"; gain = 0.3; priority = 2; }
-    else if (name == "raid-enemy-spawn") { group = "enemy"; gain = 0.18; priority = 1; }
+    if (name == "raid-shot-blaster") { group = "weapon"; gain = 0.08; priority = 0; }
+    else if (name == "raid-shot-plasma") { group = "weapon"; gain = 0.09; priority = 1; }
+    else if (name == "raid-shot-railgun") { group = "weapon"; gain = 0.11; priority = 2; }
+    else if (name == "raid-shot-hammer") { group = "weapon"; gain = 0.13; priority = 3; }
+    else if (name == "raid-enemy-hit") { group = "enemy"; gain = 0.045; priority = 0; }
+    else if (name == "raid-enemy-death") { group = "enemy"; gain = 0.085; priority = 2; }
+    else if (name == "raid-enemy-spawn") { group = "enemy"; gain = 0.06; priority = 1; }
     else if (name == "raid-victory" || name == "raid-failure" || name == "raid-start") {
         group = "stinger"; gain = 0.38; priority = 4;
-    } else { group = "effect"; gain = 0.26; priority = 3; }
+    } else { group = "effect"; gain = 0.14; priority = 3; }
     if (!path.isEmpty()) raidAudio_->play(path, group, gain, priority);
     if (name == "raid-start") {
         char *rawMusicPath = obs_module_file("sounds/raid-battle-music.wav");
         if (rawMusicPath) {
             const QString musicPath = QString::fromUtf8(rawMusicPath);
             bfree(rawMusicPath);
-            raidAudio_->play(musicPath, "music", 0.14, 0, true);
+            raidAudio_->play(musicPath, "music", 0.8, 0, true);
         }
     }
 #else

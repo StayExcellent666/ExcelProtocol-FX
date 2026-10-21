@@ -136,12 +136,18 @@ struct RaidAudio::Impl {
                 mixed.fill(0);
                 std::array<double, framesPerBlock * 2> accumulator{};
                 const double master = volume / 100.0;
-                const double headroom = 1.0 / std::sqrt(1.0 + std::max<size_t>(0, voices.size() - 1) * 0.7);
+                const size_t effectVoices = static_cast<size_t>(std::count_if(
+                    voices.begin(), voices.end(), [](const auto &voice) { return voice->group != "music"; }));
+                const double effectHeadroom = 1.0 / std::sqrt(static_cast<double>(std::max<size_t>(1, effectVoices)));
                 for (auto &voice : voices) {
                     const auto *samples = reinterpret_cast<const qint16 *>(voice->samples.constData());
                     const qsizetype totalFrames = voice->samples.size()
                         / static_cast<qsizetype>(voice->channels * sizeof(qint16));
-                    const double scale = master * voice->gain * headroom;
+                    // Keep the song at a stable level. Transient combat cues
+                    // share separate headroom, so a busy fight cannot bury the
+                    // beat or grow louder as more effects overlap.
+                    const double scale = master * voice->gain
+                        * (voice->group == "music" ? 1.0 : effectHeadroom);
                     for (qsizetype frame = 0; frame < framesPerBlock; ++frame) {
                         if (voice->cursorFrames >= totalFrames) {
                             if (!voice->loop) break;
