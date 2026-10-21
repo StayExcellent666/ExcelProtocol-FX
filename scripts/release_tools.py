@@ -17,7 +17,7 @@ REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/ExcelProtocol-FX$")
 DLL = "obs-plugins/64bit/excelprotocol-fx.dll"
 DATA = "data/obs-plugins/excelprotocol-fx/"
 SOUNDS = tuple(DATA + "sounds/" + name + ".wav" for name in
-               ("raid-start", "raid-shot-blaster-1", "raid-shot-blaster-2",
+               ("raid-start", "raid-battle-music", "raid-shot-blaster-1", "raid-shot-blaster-2",
                 "raid-shot-plasma-1", "raid-shot-plasma-2",
                 "raid-shot-railgun-1", "raid-shot-railgun-2",
                 "raid-shot-hammer-1", "raid-shot-hammer-2",

@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QString>
+#include <QThread>
 #include <iostream>
 
 int main(int argc, char **argv)
@@ -21,8 +22,15 @@ int main(int argc, char **argv)
         audio.play(path, "weapon", 0.2, 0);
         audio.play(path, "enemy", 0.2, 1);
         audio.play(path, "effect", 0.2, 2);
+        audio.play(path, "music", 0.1, 0, true);
         audio.play(path, "stinger", 0.2, 4);
         audio.stop();
     }
+    // The hammer fixture is shorter than this wait, so the worker must cross
+    // its end and wrap a looping voice at least once without a playback device.
+    fx::RaidAudio looping;
+    looping.play(path, "music", 0.1, 0, true);
+    QThread::msleep(750);
+    looping.stop();
     return 0;
 }

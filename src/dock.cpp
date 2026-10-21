@@ -136,7 +136,7 @@ QWidget *FxDock::raid()
     auto *enabled = new QCheckBox("Enable Twitch Raid Battle"); enabled->setChecked(manager_.raidEnabled());
     QObject::connect(enabled, &QCheckBox::toggled, this, [this](bool value) { manager_.setRaidEnabled(value); refresh(); });
     layout->addWidget(enabled);
-    auto *sounds = new QCheckBox("Play raid sound effects"); sounds->setChecked(manager_.raidSoundsEnabled());
+    auto *sounds = new QCheckBox("Play synthwave battle music and sound effects"); sounds->setChecked(manager_.raidSoundsEnabled());
     QObject::connect(sounds, &QCheckBox::toggled, this, [this](bool value) { manager_.setRaidSoundsEnabled(value); });
     layout->addWidget(sounds);
     auto *volumeRow = new QWidget; auto *volumeLayout = new QHBoxLayout(volumeRow); volumeLayout->setContentsMargins(0, 0, 0, 0);
@@ -147,7 +147,7 @@ QWidget *FxDock::raid()
     });
     volumeLayout->addWidget(volume); volumeLayout->addWidget(volumeValue);
     auto *soundForm = new QFormLayout; soundForm->addRow("Sound volume", volumeRow); layout->addLayout(soundForm);
-    layout->addWidget(note("Sounds are sent through the ExcelProtocol FX source in OBS. Use that source's Audio Mixer controls for stream volume, mute, and monitoring."));
+    layout->addWidget(note("The battle track loops during combat and ducks under weapons and enemy cues. Audio is sent through the ExcelProtocol FX source; use its OBS Audio Mixer controls for stream volume, mute, and monitoring."));
     auto *testGroup = new QGroupBox("Local raid test"); auto *testForm = new QFormLayout(testGroup);
     auto *viewers = new QSpinBox; viewers->setRange(1, 100000); viewers->setValue(manager_.settings().value("raid/testViewers", 8).toInt());
     QObject::connect(viewers, &QSpinBox::valueChanged, this, [this](int value) { manager_.settings().setValue("raid/testViewers", value); manager_.settings().sync(); });

@@ -63,6 +63,24 @@ int main(int argc, char **argv)
     battle.onSound = {};
     battle.clear();
 
+    QStringList testRaidCues;
+    battle.onSound = [&testRaidCues](const QString &name) { testRaidCues.push_back(name); };
+    check(battle.start(8, 0, true), "role-varied test raid starts");
+    for (qint64 now = 200; now <= 6000; now += 200) battle.tick(now);
+    check(testRaidCues.contains("raid-shot-hammer"), "test raid guarantees Ban Hammer attacks");
+    check(testRaidCues.contains("raid-shot-railgun"), "test raid guarantees Railgun attacks");
+    battle.onSound = {};
+    battle.clear();
+
+    QStringList soloTestCues;
+    battle.onSound = [&soloTestCues](const QString &name) { soloTestCues.push_back(name); };
+    check(battle.start(1, 0, true), "single-viewer test raid starts");
+    for (qint64 now = 200; now <= 2200; now += 200) battle.tick(now);
+    check(soloTestCues.contains("raid-shot-hammer") && soloTestCues.contains("raid-shot-railgun"),
+          "single-viewer test raid rotates Ban Hammer and Railgun attacks");
+    battle.onSound = {};
+    battle.clear();
+
     check(battle.start(34, 0, true), "test raid starts");
     for (qint64 now = 33; now < 20000; now += 33) battle.tick(now);
     battle.tick(20000);

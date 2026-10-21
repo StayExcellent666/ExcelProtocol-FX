@@ -18,7 +18,7 @@ public:
     void setVolume(int percent);
     void addOutputSource(obs_source_t *source);
     void removeOutputSource(obs_source_t *source);
-    void play(const QString &path, const QString &group, double gain, int priority);
+    void play(const QString &path, const QString &group, double gain, int priority, bool loop = false);
     void cleanup();
     void stop();
 

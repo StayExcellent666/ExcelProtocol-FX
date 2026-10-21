@@ -340,9 +340,11 @@ void RaidBattle::driveTestRaid(qint64 nowMs)
         const int member = static_cast<int>(sequence_++ % static_cast<quint32>(std::max(1, static_cast<int>(raiders_.size()))));
         const QString username = QString("Raider%1").arg(member + 1, 2, 10, QLatin1Char('0'));
         QString role = "default";
-        if (member == 0) role = "mod";
-        else if (member % 11 == 0) role = "vip";
-        else if (member % 4 == 0) role = "sub";
+        const int roleSlot = member % 8;
+        if (raiders_.size() == 1) role = sequence_ % 2 == 0 ? "vip" : "mod";
+        else if (roleSlot == 0 || roleSlot == 5) role = "mod";
+        else if (roleSlot == 1 || roleSlot == 6) role = "vip";
+        else if (roleSlot == 2 || roleSlot == 4) role = "sub";
         QString message = "ship it";
         if ((sequence_ % 17) == 7) message += QString::fromUtf8(" 🔥");
         if ((sequence_ % 19) == 9) message += QString::fromUtf8(" ❄️");

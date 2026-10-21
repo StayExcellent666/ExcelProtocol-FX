@@ -83,6 +83,7 @@ struct RaidAudio::Impl {
         double gain = 1.0;
         int priority = 0;
         quint64 order = 0;
+        bool loop = false;
     };
 
     std::mutex mutex;
@@ -140,24 +141,26 @@ struct RaidAudio::Impl {
                     const auto *samples = reinterpret_cast<const qint16 *>(voice->samples.constData());
                     const qsizetype totalFrames = voice->samples.size()
                         / static_cast<qsizetype>(voice->channels * sizeof(qint16));
-                    const qsizetype available = std::max<qsizetype>(0, totalFrames - voice->cursorFrames);
-                    const qsizetype count = std::min<qsizetype>(framesPerBlock, available);
                     const double scale = master * voice->gain * headroom;
-                    for (qsizetype frame = 0; frame < count; ++frame) {
-                        const qsizetype index = (voice->cursorFrames + frame) * voice->channels;
+                    for (qsizetype frame = 0; frame < framesPerBlock; ++frame) {
+                        if (voice->cursorFrames >= totalFrames) {
+                            if (!voice->loop) break;
+                            voice->cursorFrames = 0;
+                        }
+                        const qsizetype index = voice->cursorFrames * voice->channels;
                         const qint16 left = samples[index];
                         const qint16 right = voice->channels == 2 ? samples[index + 1] : left;
                         accumulator[frame * 2] += left * scale;
                         accumulator[frame * 2 + 1] += right * scale;
+                        ++voice->cursorFrames;
                     }
-                    voice->cursorFrames += count;
                 }
                 for (size_t index = 0; index < mixed.size(); ++index)
                     mixed[index] = static_cast<qint16>(std::clamp(accumulator[index], -32768.0, 32767.0));
                 std::erase_if(voices, [](const auto &voice) {
                     const qsizetype totalFrames = voice->samples.size()
                         / static_cast<qsizetype>(voice->channels * sizeof(qint16));
-                    return voice->cursorFrames >= totalFrames;
+                    return !voice->loop && voice->cursorFrames >= totalFrames;
                 });
                 output = activeSourceLocked();
             }
@@ -217,7 +220,7 @@ void RaidAudio::removeOutputSource(obs_source_t *source)
     }
 }
 
-void RaidAudio::play(const QString &path, const QString &group, double gain, int priority)
+void RaidAudio::play(const QString &path, const QString &group, double gain, int priority, bool loop)
 {
     WaveData wave;
     if (!loadWave(path, wave)) return;
@@ -231,7 +234,7 @@ void RaidAudio::play(const QString &path, const QString &group, double gain, int
         if ((*sameGroup)->priority >= priority) return;
         impl_->voices.erase(sameGroup);
     }
-    if (impl_->voices.size() >= 3) {
+    if (impl_->voices.size() >= 4) {
         const auto quietest = std::min_element(impl_->voices.begin(), impl_->voices.end(), [](const auto &left, const auto &right) {
             return left->priority != right->priority ? left->priority < right->priority : left->order < right->order;
         });
@@ -245,6 +248,7 @@ void RaidAudio::play(const QString &path, const QString &group, double gain, int
     voice->gain = std::clamp(gain, 0.0, 1.0);
     voice->priority = priority;
     voice->order = ++impl_->nextOrder;
+    voice->loop = loop;
     impl_->voices.push_back(std::move(voice));
     impl_->wake.notify_one();
 }

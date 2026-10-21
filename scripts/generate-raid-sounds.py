@@ -154,6 +154,61 @@ def enemy_spawn(number: int) -> None:
     save(f"raid-enemy-spawn-{number}", sound)
 
 
+def synthwave_battle() -> None:
+    """Build a seamless eight-bar synthwave loop at 120 BPM."""
+    music = buffer(16.0)
+    beat = .5
+    # E minor, C major, G major, D major. Two passes make an eight-bar loop.
+    chords = (
+        (82.41, (164.81, 196.00, 246.94)),
+        (65.41, (130.81, 164.81, 196.00)),
+        (98.00, (196.00, 246.94, 293.66)),
+        (73.42, (146.83, 185.00, 220.00)),
+    )
+    for bar in range(8):
+        start = bar * 4 * beat
+        root, chord = chords[bar % len(chords)]
+
+        # Wide analog pads carry the progression without crowding combat cues.
+        for note_index, note in enumerate(chord):
+            tone(music, start, 1.94, note, note * 1.002, .075, "saw",
+                 -.55 + note_index * .55, 3.5 + note_index)
+            tone(music, start, 1.96, note / 2, note / 2, .075, "sine",
+                 .45 - note_index * .45)
+
+        # Pulsing octave bass and a moving sixteenth-note neon arpeggio.
+        for step in range(4):
+            at = start + step * beat
+            bass = root * (2 if step == 3 else 1)
+            tone(music, at, .42, bass, bass * .985, .34, "saw", -.08)
+            tone(music, at, .45, root / 2, root / 2, .26, "sine", .08)
+        arp = (chord[0], chord[1], chord[2], chord[1], chord[0] * 2, chord[2], chord[1], chord[2])
+        for step in range(16):
+            note = arp[step % len(arp)] * (1.0 if step < 8 else 1.5)
+            tone(music, start + step * beat / 2, .19, note, note * 1.01,
+                 .10, "pulse", -.65 + (step % 4) * .43)
+
+        # Four-on-the-floor kick, gated snare and alternating hats.
+        for step in range(4):
+            at = start + step * beat
+            tone(music, at, .22, 96, 43, .55, "sine")
+            noise(music, at, .055, .16, 700 + bar * 8 + step, color=.72)
+            if step in (1, 3):
+                noise(music, at, .19, .34, 800 + bar * 8 + step, color=.2)
+                tone(music, at, .13, 185, 118, .13, "square")
+            noise(music, at + beat / 2, .07, .12, 900 + bar * 8 + step,
+                  pan=-.35 if step % 2 else .35, color=.86)
+
+    # A restrained heroic hook enters on the second half of each pass.
+    hook = (329.63, 392.00, 493.88, 440.00, 392.00, 329.63, 293.66, 246.94)
+    for section in (4.0, 12.0):
+        for index, note in enumerate(hook):
+            at = section + index * beat / 2
+            tone(music, at, .38, note, note * 1.004, .16, "saw", .18, 5)
+            tone(music, at, .4, note / 2, note / 2, .08, "sine", -.2)
+    save("raid-battle-music", music)
+
+
 def main() -> None:
     start = buffer(1.45)
     noise(start, 0, .6, .2, 10, color=.04)
@@ -161,6 +216,8 @@ def main() -> None:
         tone(start, .12 + index * .18, .5, note, note * 1.015, .27, "saw", -.35 + index * .18)
         tone(start, .12 + index * .18, .58, note * 1.5, note * 1.515, .15, "sine", .35 - index * .15)
     echo(start, .14, .3); save("raid-start", start)
+
+    synthwave_battle()
 
     for kind in ("blaster", "plasma", "railgun", "hammer"):
         for number in range(1, 3): weapon_shot(kind, number)

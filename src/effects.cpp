@@ -609,6 +609,14 @@ void EffectManager::playRaidSound(const QString &name)
         group = "stinger"; gain = 0.38; priority = 4;
     } else { group = "effect"; gain = 0.26; priority = 3; }
     if (!path.isEmpty()) raidAudio_->play(path, group, gain, priority);
+    if (name == "raid-start") {
+        char *rawMusicPath = obs_module_file("sounds/raid-battle-music.wav");
+        if (rawMusicPath) {
+            const QString musicPath = QString::fromUtf8(rawMusicPath);
+            bfree(rawMusicPath);
+            raidAudio_->play(musicPath, "music", 0.14, 0, true);
+        }
+    }
 #else
     Q_UNUSED(name);
 #endif
