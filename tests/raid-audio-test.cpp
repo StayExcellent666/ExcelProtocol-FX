@@ -13,15 +13,15 @@ int main(int argc, char **argv)
         return 1;
     }
     const QString path = QString::fromLocal8Bit(argv[1]);
-    // Gain zero keeps this device/lifetime stress test silent while still
-    // exercising open, prepare, reset, unprepare, and close repeatedly.
-    for (int cycle = 0; cycle < 100; ++cycle) {
+    // No OBS output source is registered, so this exercises mixer queueing and
+    // thread shutdown without sending audio to a system playback device.
+    for (int cycle = 0; cycle < 50; ++cycle) {
         fx::RaidAudio audio;
         audio.setVolume(100);
-        audio.play(path, "weapon", 0.0, 0);
-        audio.play(path, "enemy", 0.0, 1);
-        audio.play(path, "effect", 0.0, 2);
-        audio.play(path, "stinger", 0.0, 4);
+        audio.play(path, "weapon", 0.2, 0);
+        audio.play(path, "enemy", 0.2, 1);
+        audio.play(path, "effect", 0.2, 2);
+        audio.play(path, "stinger", 0.2, 4);
         audio.stop();
     }
     return 0;

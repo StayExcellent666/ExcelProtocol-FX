@@ -557,6 +557,16 @@ void EffectManager::setRaidSoundVolume(int value)
     notifyChanged();
 }
 
+void EffectManager::addRaidAudioOutput(obs_source_t *source)
+{
+    if (raidAudio_) raidAudio_->addOutputSource(source);
+}
+
+void EffectManager::removeRaidAudioOutput(obs_source_t *source)
+{
+    if (raidAudio_) raidAudio_->removeOutputSource(source);
+}
+
 QJsonObject EffectManager::raidStatus() const
 {
     return raid_.status(clock_.elapsed());

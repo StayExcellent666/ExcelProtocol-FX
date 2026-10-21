@@ -644,9 +644,11 @@ void RaidBattle::paint(QPainter &painter, qint64 nowMs) const
         painter.drawRoundedRect(QRectF(470, 360, 980, 300), 14, 14);
         if (roadblock_ == Roadblock::InfiniteLoop) {
             painter.setPen(QPen(gold, 12, Qt::SolidLine, Qt::RoundCap));
-            painter.drawArc(QRectF(845, 395, 230, 145), static_cast<int>((nowMs / 4) % (360 * 16)), 270 * 16);
-            label(painter, QRectF(540, 530, 840, 50), "INFINITE LOOP FREEZE", 34, gold, Qt::AlignCenter);
-            label(painter, QRectF(540, 585, 840, 40), "CHAT: type  break;", 24, Qt::white, Qt::AlignCenter);
+            const QRectF loopRing(892, 378, 136, 136);
+            painter.drawArc(loopRing, static_cast<int>((nowMs / 4) % (360 * 16)), 270 * 16);
+            label(painter, loopRing.adjusted(12, 12, -12, -12), "LOOP", 20, gold, Qt::AlignCenter);
+            label(painter, QRectF(540, 528, 840, 46), "INFINITE LOOP FREEZE", 32, gold, Qt::AlignCenter);
+            label(painter, QRectF(540, 588, 840, 36), "CHAT: type  break;", 23, Qt::white, Qt::AlignCenter);
         } else {
             label(painter, QRectF(540, 405, 840, 65), "<<<<<<< HEAD", 42, red, Qt::AlignCenter);
             label(painter, QRectF(540, 490, 840, 50), "MERGE CONFLICT BLOCKER", 31, gold, Qt::AlignCenter);

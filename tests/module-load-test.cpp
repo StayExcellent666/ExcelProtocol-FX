@@ -55,11 +55,12 @@ int main(int argc, char **argv)
     } else if (!obs_init_module(module)) {
         std::fprintf(stderr, "obs_init_module failed\n");
         result = 5;
-    } else if ((obs_get_source_output_flags("excelprotocol_fx") & OBS_SOURCE_VIDEO) == 0) {
-        std::fprintf(stderr, "excelprotocol_fx video source was not registered\n");
+    } else if ((obs_get_source_output_flags("excelprotocol_fx") & (OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO))
+               != (OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO)) {
+        std::fprintf(stderr, "excelprotocol_fx audio/video source was not registered\n");
         result = 6;
     } else {
-        std::puts("ExcelProtocol FX loaded and registered its OBS video source.");
+        std::puts("ExcelProtocol FX loaded and registered its OBS audio/video source.");
     }
     obs_shutdown();
     for (auto iterator = hostLibraries.rbegin(); iterator != hostLibraries.rend(); ++iterator)

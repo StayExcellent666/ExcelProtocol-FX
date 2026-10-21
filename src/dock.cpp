@@ -147,7 +147,7 @@ QWidget *FxDock::raid()
     });
     volumeLayout->addWidget(volume); volumeLayout->addWidget(volumeValue);
     auto *soundForm = new QFormLayout; soundForm->addRow("Sound volume", volumeRow); layout->addLayout(soundForm);
-    layout->addWidget(note("Sounds play through the Windows default output. Keep that output in OBS Desktop Audio if viewers should hear them."));
+    layout->addWidget(note("Sounds are sent through the ExcelProtocol FX source in OBS. Use that source's Audio Mixer controls for stream volume, mute, and monitoring."));
     auto *testGroup = new QGroupBox("Local raid test"); auto *testForm = new QFormLayout(testGroup);
     auto *viewers = new QSpinBox; viewers->setRange(1, 100000); viewers->setValue(manager_.settings().value("raid/testViewers", 8).toInt());
     QObject::connect(viewers, &QSpinBox::valueChanged, this, [this](int value) { manager_.settings().setValue("raid/testViewers", value); manager_.settings().sync(); });

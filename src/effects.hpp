@@ -16,6 +16,7 @@
 #include <mutex>
 
 class QScreen;
+typedef struct obs_source obs_source_t;
 
 namespace fx {
 
@@ -80,6 +81,8 @@ public:
     void setRaidSoundsEnabled(bool value);
     int raidSoundVolume() const { return raidSoundVolume_; }
     void setRaidSoundVolume(int value);
+    void addRaidAudioOutput(obs_source_t *source);
+    void removeRaidAudioOutput(obs_source_t *source);
     QJsonObject raidStatus() const;
     QJsonObject command(const QJsonObject &request);
     void clear();

@@ -9,8 +9,10 @@
 #include <QDir>
 #include <QMetaObject>
 #include <QPointer>
+#include <algorithm>
 #include <memory>
 #include <mutex>
+#include <vector>
 #include <util/bmem.h>
 
 OBS_DECLARE_MODULE()
@@ -28,8 +30,11 @@ obs_hotkey_id clearHotkey = OBS_INVALID_HOTKEY_ID;
 std::mutex hotkeyMutex;
 fx::EffectManager *hotkeyManager = nullptr;
 bool dockRegistered = false;
+std::mutex sourceMutex;
+std::vector<struct SourceData *> sources;
 
 struct SourceData {
+    obs_source_t *source = nullptr;
     std::shared_ptr<fx::FrameState> frame = fx::sharedFrame();
     gs_texture_t *texture = nullptr;
     quint64 serial = static_cast<quint64>(-1);
@@ -38,15 +43,26 @@ struct SourceData {
 };
 
 const char *sourceName(void *) { return "ExcelProtocol FX"; }
-void *sourceCreate(obs_data_t *, obs_source_t *)
+void *sourceCreate(obs_data_t *, obs_source_t *obsSource)
 {
     auto *source = new SourceData;
+    source->source = obsSource;
     ++source->frame->sourceCount;
+    {
+        std::lock_guard<std::mutex> guard(sourceMutex);
+        sources.push_back(source);
+        if (manager) manager->addRaidAudioOutput(obsSource);
+    }
     return source;
 }
 void sourceDestroy(void *data)
 {
     auto *source = static_cast<SourceData *>(data);
+    {
+        std::lock_guard<std::mutex> guard(sourceMutex);
+        if (manager) manager->removeRaidAudioOutput(source->source);
+        std::erase(sources, source);
+    }
     --source->frame->sourceCount;
     obs_enter_graphics();
     if (source->texture) gs_texture_destroy(source->texture);
@@ -85,7 +101,7 @@ void sourceRender(void *data, gs_effect_t *)
 obs_properties_t *sourceProperties(void *)
 {
     auto *properties = obs_properties_create();
-    obs_properties_add_text(properties, "info", "Configure effects in Docks > ExcelProtocol FX. Place this source above gameplay. The desktop and stream outputs share the same animation frame.", OBS_TEXT_INFO);
+    obs_properties_add_text(properties, "info", "Configure effects in Docks > ExcelProtocol FX. Place this source above gameplay. Raid sounds are emitted through this source and can be controlled in the OBS Audio Mixer.", OBS_TEXT_INFO);
     return properties;
 }
 
@@ -114,6 +130,10 @@ void initializeUi()
 {
     if (manager || !qApp) return;
     manager = std::make_unique<fx::EffectManager>();
+    {
+        std::lock_guard<std::mutex> guard(sourceMutex);
+        for (auto *source : sources) manager->addRaidAudioOutput(source->source);
+    }
     {
         std::lock_guard<std::mutex> guard(hotkeyMutex);
         hotkeyManager = manager.get();
@@ -168,7 +188,7 @@ bool obs_module_load(void)
     struct obs_source_info info{};
     info.id = "excelprotocol_fx";
     info.type = OBS_SOURCE_TYPE_INPUT;
-    info.output_flags = OBS_SOURCE_VIDEO;
+    info.output_flags = OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO;
     info.get_name = sourceName; info.create = sourceCreate; info.destroy = sourceDestroy;
     info.get_width = sourceWidth; info.get_height = sourceHeight; info.video_render = sourceRender;
     info.get_properties = sourceProperties; info.icon_type = OBS_ICON_TYPE_CUSTOM;
