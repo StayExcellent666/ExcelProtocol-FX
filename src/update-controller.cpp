@@ -11,6 +11,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLabel>
+#include <QMessageBox>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -22,6 +23,7 @@
 #include <QUuid>
 #include <QVBoxLayout>
 #include <obs.h>
+#include <obs-frontend-api.h>
 #include <memory>
 #include <vector>
 
@@ -112,9 +114,9 @@ QWidget *UpdateController::createWidget(QWidget *parent)
     auto *layout = new QVBoxLayout(widget);
     auto *check = new QCheckBox(tr("Automatically Check for Updates"), widget);
     check->setChecked(m_settings->value(QStringLiteral("updates/autoCheck"), true).toBool());
-    auto *install = new QCheckBox(tr("Automatically Install Updates"), widget);
-    install->setChecked(m_settings->value(QStringLiteral("updates/autoInstall"), false).toBool());
-    auto *explanation = new QLabel(tr("Downloads are verified and queued until OBS closes. Windows may then ask for administrator permission. OBS is never closed or restarted for you."), widget);
+    auto *install = new QCheckBox(tr("Automatically Download and Install Updates"), widget);
+    install->setChecked(m_settings->value(QStringLiteral("updates/autoInstall"), true).toBool());
+    auto *explanation = new QLabel(tr("Updates are verified before installation. When one is ready, choose whether to restart OBS now or install after you close it later. Windows may request administrator permission."), widget);
     explanation->setWordWrap(true);
     auto *channels = new QComboBox(widget);
     channels->addItem(tr("Stable releases"), QStringLiteral("stable"));
@@ -122,7 +124,7 @@ QWidget *UpdateController::createWidget(QWidget *parent)
     channels->setCurrentIndex(channel(m_settings) == QStringLiteral("beta") ? 1 : 0);
     auto *row = new QHBoxLayout;
     m_checkButton = new QPushButton(tr("Check for Updates"), widget);
-    m_installButton = new QPushButton(tr("Download Update for After OBS Closes"), widget);
+    m_installButton = new QPushButton(tr("Download Update"), widget);
     m_cancelButton = new QPushButton(tr("Cancel Queued Update"), widget);
     row->addWidget(m_checkButton);
     row->addWidget(m_installButton);
@@ -158,7 +160,14 @@ QWidget *UpdateController::createWidget(QWidget *parent)
         updateButtons();
     });
     connect(m_checkButton, &QPushButton::clicked, this, [this] { this->check(); });
-    connect(m_installButton, &QPushButton::clicked, this, [this] { stage(false); });
+    connect(m_installButton, &QPushButton::clicked, this, [this] {
+        if (m_staged) {
+            m_restartPromptShown = false;
+            promptRestart();
+        } else {
+            stage(false);
+        }
+    });
     connect(m_cancelButton, &QPushButton::clicked, this, [this] { cancelStage(); });
     const bool configured = update::validRepository(m_repository);
     check->setEnabled(configured);
@@ -202,7 +211,9 @@ void UpdateController::updateButtons()
     if (m_checkButton)
         m_checkButton->setEnabled(!m_busy && !m_staged && !m_stopping && update::validRepository(m_repository));
     if (m_installButton)
-        m_installButton->setEnabled(m_offer.has_value() && !m_busy && !m_staged && !m_stopping);
+        m_installButton->setEnabled(m_staged || (m_offer.has_value() && !m_busy && !m_stopping));
+    if (m_installButton)
+        m_installButton->setText(m_staged ? tr("Restart OBS to Install") : tr("Download Update"));
     if (m_cancelButton)
         m_cancelButton->setEnabled(!m_stageDirectory.isEmpty() && !m_stopping);
 }
@@ -386,10 +397,11 @@ void UpdateController::inspectRelease(const update::Offer &offer)
             setStatus(error);
         } else {
             m_offer = offer;
-            setStatus(tr("Version %1 (%2) is available. Download it to install after OBS closes.").arg(offer.version, offer.channel));
+            m_restartPromptShown = false;
+            setStatus(tr("Version %1 (%2) is available. It can be downloaded and installed automatically.").arg(offer.version, offer.channel));
         }
         updateButtons();
-        if (m_offer && m_settings->value(QStringLiteral("updates/autoInstall"), false).toBool())
+        if (m_offer && m_settings->value(QStringLiteral("updates/autoInstall"), true).toBool())
             stage(true);
     });
 }
@@ -428,9 +440,51 @@ void UpdateController::stage(bool automatic)
         } else {
             m_stagedDigest = offer.installer.sha256;
             m_staged = true;
-            setStatus(tr("Version %1 is verified and queued. It will install after all OBS windows close; Windows may request permission.").arg(offer.version));
+            setStatus(tr("Version %1 is verified and ready. Restart OBS now or leave it queued until OBS closes.").arg(offer.version));
+            QTimer::singleShot(0, this, [this] { promptRestart(); });
         }
         updateButtons();
+    });
+}
+
+void UpdateController::promptRestart()
+{
+    if (!m_staged || m_busy || m_stopping || m_restartPromptShown)
+        return;
+    m_restartPromptShown = true;
+    QMessageBox prompt(m_statusLabel ? m_statusLabel->window() : nullptr);
+    prompt.setIcon(QMessageBox::Question);
+    prompt.setWindowTitle(tr("ExcelProtocol FX Update Ready"));
+    prompt.setText(tr("ExcelProtocol FX %1 is ready to install.").arg(m_offer ? m_offer->version : QString()));
+    const bool outputActive = obs_frontend_streaming_active() || obs_frontend_recording_active();
+    prompt.setInformativeText(outputActive
+        ? tr("OBS is currently streaming or recording. Restarting now will stop the active output. Choose Later to install when you finish.")
+        : tr("Restart OBS now to install the verified update automatically, or choose Later to install when OBS closes."));
+    auto *restart = prompt.addButton(tr("Restart OBS Now"), QMessageBox::AcceptRole);
+    auto *later = prompt.addButton(tr("Later"), QMessageBox::RejectRole);
+    restart->setEnabled(!outputActive);
+    prompt.setDefaultButton(later);
+    prompt.exec();
+    if (prompt.clickedButton() != restart) {
+        setStatus(tr("Update ready. It will install after OBS closes, or click Restart OBS to Install when ready."));
+        updateButtons();
+        return;
+    }
+    if (!launchHelper(true)) {
+        m_restartPromptShown = false;
+        setStatus(tr("The update helper could not start. The update remains queued for later."));
+        updateButtons();
+        return;
+    }
+    m_helperLaunched = true;
+    m_staged = false;
+    m_offer.reset();
+    setStatus(tr("Closing OBS to install the update. OBS will reopen automatically when installation finishes."));
+    updateButtons();
+    QTimer::singleShot(0, this, [this] {
+        auto *mainWindow = static_cast<QWidget *>(obs_frontend_get_main_window());
+        if (!mainWindow || !mainWindow->close())
+            setStatus(tr("OBS did not close. The verified update will wait for the next normal shutdown."));
     });
 }
 
@@ -442,6 +496,7 @@ void UpdateController::cancelStage()
     m_staged = false;
     m_busy = false;
     m_stageAutomatic = false;
+    m_restartPromptShown = false;
     if (!m_stageDirectory.isEmpty()) {
         QFile::remove(m_stageDirectory + QStringLiteral("/setup.exe"));
         QFile::remove(m_stageDirectory + QStringLiteral("/excelprotocol-fx-updater.exe"));
@@ -453,7 +508,7 @@ void UpdateController::cancelStage()
     updateButtons();
 }
 
-bool UpdateController::launchHelper()
+bool UpdateController::launchHelper(bool restartObs)
 {
 #ifdef _WIN32
     HANDLE waitHandle = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, TRUE, GetCurrentProcessId());
@@ -477,7 +532,8 @@ bool UpdateController::launchHelper()
     std::wstring command = quote(helper) + L" --wait-handle " +
         std::to_wstring(reinterpret_cast<uintptr_t>(waitHandle)) + L" --parent-pid " + std::to_wstring(GetCurrentProcessId()) +
         L" --installer " + quote(installer) + L" --sha256 " + quote(m_stagedDigest) +
-        L" --obs-root " + quote(QDir::toNativeSeparators(m_obsRoot));
+        L" --obs-root " + quote(QDir::toNativeSeparators(m_obsRoot)) +
+        L" --restart-obs " + std::wstring(restartObs ? L"1" : L"0");
     STARTUPINFOEXW startup{};
     startup.StartupInfo.cb = sizeof(startup);
     startup.lpAttributeList = list;
@@ -509,7 +565,7 @@ void UpdateController::shutdown()
     ++m_generation;
     if (m_reply)
         m_reply->abort();
-    if (m_staged && !launchHelper())
+    if (m_staged && !m_helperLaunched && !launchHelper(false))
         blog(LOG_WARNING, "[ExcelProtocol-FX] The update helper could not start; no update was installed.");
 }
 } // namespace fx

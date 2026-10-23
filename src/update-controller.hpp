@@ -31,12 +31,13 @@ private:
     void inspectRelease(const update::Offer &offer);
     void stage(bool automatic);
     void cancelStage();
+    void promptRestart();
     void setStatus(const QString &text);
     void updateButtons();
     void fetch(const QUrl &url, qint64 maximum, const QString &destination,
                const QString &expectedDigest, qint64 expectedSize,
                DownloadResult complete, int redirects = 0, QUrl original = {});
-    bool launchHelper();
+    bool launchHelper(bool restartObs);
 
     QSettings *m_settings;
     QNetworkAccessManager *m_network;
@@ -58,5 +59,7 @@ private:
     bool m_started = false;
     bool m_staged = false;
     bool m_stageAutomatic = false;
+    bool m_restartPromptShown = false;
+    bool m_helperLaunched = false;
 };
 } // namespace fx

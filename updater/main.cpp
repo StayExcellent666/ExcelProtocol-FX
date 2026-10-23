@@ -231,13 +231,13 @@ int run(int argc, wchar_t **argv)
         std::wstring actual;
         return file && sha256(file.get(), &actual) && actual == argv[3] ? 0 : 4;
     }
-    if (argc != 11)
+    if (argc != 13)
         return 2;
     std::map<std::wstring, std::wstring> options;
     for (int i = 1; i < argc; i += 2) {
         const std::wstring key(argv[i]);
         if (key != L"--wait-handle" && key != L"--parent-pid" && key != L"--installer" &&
-            key != L"--sha256" && key != L"--obs-root")
+            key != L"--sha256" && key != L"--obs-root" && key != L"--restart-obs")
             return 2;
         if (!options.emplace(key, argv[i + 1]).second)
             return 2;
@@ -246,6 +246,7 @@ int run(int argc, wchar_t **argv)
     uint64_t parentPid = 0;
     if (!decimal(options[L"--wait-handle"], &rawHandle) || rawHandle > UINTPTR_MAX ||
         !decimal(options[L"--parent-pid"], &parentPid) || parentPid > MAXDWORD ||
+        (options[L"--restart-obs"] != L"0" && options[L"--restart-obs"] != L"1") ||
         !digestSyntax(options[L"--sha256"]))
         return 2;
     const auto executable = executablePath();
@@ -306,6 +307,19 @@ int run(int argc, wchar_t **argv)
     DWORD exitCode = MAXDWORD;
     if (!GetExitCodeProcess(setup.get(), &exitCode) || exitCode != 0)
         return result(6, "The installer did not complete successfully; check installer.log. OBS was not restarted.");
+    if (options[L"--restart-obs"] == L"1") {
+        const auto obsExecutable = obsRoot + L"\\bin\\64bit\\obs64.exe";
+        const auto obsDirectory = obsRoot + L"\\bin\\64bit";
+        STARTUPINFOW startup{};
+        startup.cb = sizeof(startup);
+        PROCESS_INFORMATION process{};
+        if (!CreateProcessW(obsExecutable.c_str(), nullptr, nullptr, nullptr, FALSE, 0, nullptr,
+                            obsDirectory.c_str(), &startup, &process))
+            return result(7, "Update installed successfully, but OBS could not be restarted. Start OBS manually.");
+        CloseHandle(process.hThread);
+        CloseHandle(process.hProcess);
+        return result(0, "Update installed successfully and OBS was restarted.");
+    }
     return result(0, "Update installed successfully. Start OBS when ready.");
 }
 } // namespace
