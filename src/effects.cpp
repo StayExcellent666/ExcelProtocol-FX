@@ -598,10 +598,10 @@ void EffectManager::playRaidSound(const QString &name)
     QString group = name;
     double gain = 0.34;
     int priority = 1;
-    if (name == "raid-shot-blaster") { group = "weapon"; gain = 0.08; priority = 0; }
-    else if (name == "raid-shot-plasma") { group = "weapon"; gain = 0.09; priority = 1; }
-    else if (name == "raid-shot-railgun") { group = "weapon"; gain = 0.11; priority = 2; }
-    else if (name == "raid-shot-hammer") { group = "weapon"; gain = 0.13; priority = 3; }
+    if (name == "raid-shot-blaster") { group = "weapon"; gain = 0.16; priority = 0; }
+    else if (name == "raid-shot-plasma") { group = "weapon"; gain = 0.19; priority = 1; }
+    else if (name == "raid-shot-railgun") { group = "weapon"; gain = 0.23; priority = 2; }
+    else if (name == "raid-shot-hammer") { group = "weapon"; gain = 0.27; priority = 3; }
     else if (name == "raid-enemy-hit") { group = "enemy"; gain = 0.045; priority = 0; }
     else if (name == "raid-enemy-death") { group = "enemy"; gain = 0.085; priority = 2; }
     else if (name == "raid-enemy-spawn") { group = "enemy"; gain = 0.06; priority = 1; }

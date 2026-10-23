@@ -57,27 +57,67 @@ void paintRaider(QPainter &painter, const QPointF &p, int style, const QColor &c
 {
     painter.save();
     painter.translate(p);
+    const QColor ink(3, 14, 23);
+    const QColor shade = color.darker(170);
+    const QColor highlight = color.lighter(145);
     if (active) {
         painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 110), 2));
         painter.setBrush(QColor(color.red(), color.green(), color.blue(), static_cast<int>(25 + pulse * 30)));
         painter.drawEllipse(QPointF(15, 21), 25 + pulse * 4, 25 + pulse * 4);
     }
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0, 0, 0, 105));
+    painter.drawEllipse(QPointF(16, 45), 19, 6);
     painter.setPen(QPen(QColor(3, 22, 29), 2));
     painter.setBrush(color);
     if (style == 0) {
-        painter.drawRoundedRect(QRectF(5, 5, 22, 30), 5, 5);
-        painter.setBrush(QColor(3, 14, 23)); painter.drawRect(QRectF(9, 11, 14, 8));
-        painter.setPen(QPen(color, 3)); painter.drawLine(7, 36, 3, 45); painter.drawLine(24, 36, 29, 45);
+        // Visor trooper.
+        painter.drawRoundedRect(QRectF(4, 6, 25, 30), 6, 6);
+        painter.setBrush(ink); painter.drawRoundedRect(QRectF(8, 11, 17, 8), 3, 3);
+        painter.setBrush(highlight); painter.drawRect(QRectF(10, 12, 9, 2));
+        painter.setPen(QPen(shade, 4)); painter.drawLine(8, 36, 4, 45); painter.drawLine(24, 36, 29, 45);
     } else if (style == 1) {
-        painter.drawEllipse(QRectF(5, 3, 22, 18)); painter.drawRoundedRect(QRectF(8, 20, 17, 19), 3, 3);
-        painter.setPen(QPen(QColor(3, 14, 23), 3)); painter.drawLine(10, 12, 14, 12); painter.drawLine(19, 12, 23, 12);
+        // Round scout bot.
+        painter.drawEllipse(QRectF(3, 3, 27, 22)); painter.setBrush(shade);
+        painter.drawRoundedRect(QRectF(7, 24, 20, 16), 5, 5);
+        painter.setBrush(ink); painter.drawEllipse(QPointF(11, 14), 3, 3); painter.drawEllipse(QPointF(22, 14), 3, 3);
+        painter.setPen(QPen(highlight, 2)); painter.drawLine(16, 3, 16, -3); painter.drawEllipse(QPointF(16, -5), 2, 2);
     } else if (style == 2) {
+        // Hooded cyber operative.
         QPolygonF hood{QPointF(16, 1), QPointF(29, 18), QPointF(25, 39), QPointF(7, 39), QPointF(3, 18)};
-        painter.drawPolygon(hood); painter.setBrush(QColor(3, 14, 23)); painter.drawEllipse(QPointF(16, 18), 7, 6);
-    } else {
+        painter.drawPolygon(hood); painter.setBrush(ink); painter.drawEllipse(QPointF(16, 18), 8, 7);
+        painter.setPen(QPen(highlight, 2)); painter.drawArc(QRectF(7, 7, 18, 22), 20 * 16, 140 * 16);
+    } else if (style == 3) {
+        // Antenna android.
         painter.drawRect(QRectF(5, 7, 23, 28)); painter.setBrush(QColor(3, 14, 23));
         painter.drawRect(QRectF(9, 11, 15, 10)); painter.setPen(QPen(color, 3));
         painter.drawLine(7, 4, 2, 0); painter.drawLine(26, 4, 31, 0);
+        painter.setPen(QPen(highlight, 2)); painter.drawLine(11, 28, 22, 28);
+    } else if (style == 4) {
+        // Shield guardian.
+        painter.drawEllipse(QRectF(7, 2, 19, 18)); painter.drawRoundedRect(QRectF(8, 19, 19, 22), 4, 4);
+        painter.setBrush(shade);
+        QPolygonF shield{QPointF(0, 17), QPointF(11, 13), QPointF(12, 34), QPointF(5, 43), QPointF(-2, 34)};
+        painter.drawPolygon(shield); painter.setPen(QPen(highlight, 2)); painter.drawLine(5, 18, 5, 37);
+    } else if (style == 5) {
+        // Cape ranger.
+        painter.drawEllipse(QRectF(7, 2, 19, 18)); painter.drawRoundedRect(QRectF(8, 18, 18, 21), 4, 4);
+        painter.setBrush(shade);
+        QPainterPath cape; cape.moveTo(9, 18); cape.lineTo(-2, 44); cape.lineTo(18, 38); cape.closeSubpath();
+        painter.drawPath(cape); painter.setBrush(ink); painter.drawRect(QRectF(10, 8, 15, 5));
+    } else if (style == 6) {
+        // Heavy exo-frame.
+        painter.drawRoundedRect(QRectF(5, 8, 24, 29), 3, 3);
+        painter.setBrush(shade); painter.drawEllipse(QPointF(2, 18), 7, 9); painter.drawEllipse(QPointF(31, 18), 7, 9);
+        painter.setBrush(ink); painter.drawRect(QRectF(9, 12, 16, 8));
+        painter.setPen(QPen(highlight, 3)); painter.drawLine(11, 29, 23, 29);
+    } else {
+        // Floating field technician.
+        QPolygonF body{QPointF(16, 3), QPointF(28, 16), QPointF(23, 34), QPointF(9, 34), QPointF(4, 16)};
+        painter.drawPolygon(body); painter.setBrush(ink); painter.drawEllipse(QPointF(16, 17), 6, 6);
+        painter.setPen(QPen(highlight, 2));
+        painter.drawLine(4, 22, -4, 27); painter.drawEllipse(QPointF(-7, 29), 4, 4);
+        painter.drawLine(9, 39, 23, 39); painter.drawLine(6, 43, 26, 43);
     }
     QPointF direction = aim - p - QPointF(26, 22);
     const double length = std::max(1.0, std::hypot(direction.x(), direction.y()));
@@ -92,6 +132,11 @@ void paintEnemyShape(QPainter &painter, int kind, const QPointF &p, const QColor
 {
     painter.save();
     painter.translate(p);
+    const qreal variantScale = 0.92 + (seed % 17) / 100.0;
+    painter.scale(variantScale, variantScale);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(color.red(), color.green(), color.blue(), 28));
+    painter.drawEllipse(QPointF(0, 2), 60, 55);
     painter.setPen(QPen(color, 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
     painter.setBrush(QColor(10, 13, 25, 240));
     if (kind == 0) {
@@ -101,18 +146,21 @@ void paintEnemyShape(QPainter &painter, int kind, const QPointF &p, const QColor
             painter.drawLine(QPointF(side * 30, y), QPointF(side * (51 + leg * 3), y + (leg - 1) * 7));
         }
         painter.setBrush(color); painter.drawEllipse(QPointF(-14, -7), 5, 5); painter.drawEllipse(QPointF(14, -7), 5, 5);
+        painter.setPen(QPen(color.lighter(145), 2)); painter.drawArc(QRectF(-27, -17, 54, 37), 200 * 16, 140 * 16);
         label(painter, QRectF(-25, 3, 50, 20), "{;}", 15, color, Qt::AlignCenter);
     } else if (kind == 1) {
         QPainterPath ghost; ghost.moveTo(-38, 30); ghost.cubicTo(-52, -13, -33, -43, 0, -45);
         ghost.cubicTo(34, -43, 50, -12, 38, 30); ghost.lineTo(25, 18); ghost.lineTo(12, 32);
         ghost.lineTo(0, 18); ghost.lineTo(-13, 32); ghost.lineTo(-26, 18); ghost.closeSubpath();
         painter.drawPath(ghost); painter.setBrush(color); painter.drawEllipse(QPointF(-13, -13), 6, 8); painter.drawEllipse(QPointF(13, -13), 6, 8);
+        painter.setPen(QPen(color.lighter(140), 2)); painter.drawArc(QRectF(-24, -35, 48, 54), 30 * 16, 120 * 16);
     } else if (kind == 2) {
         for (int i = 0; i < 4; ++i) {
             const qreal shift = (i % 2) * 8 - 4;
             painter.drawRoundedRect(QRectF(-43 + shift, 24 - i * 20, 86, 17), 3, 3);
         }
         painter.setBrush(color); painter.drawRect(QRectF(-24, -51, 48, 13));
+        painter.setBrush(color.lighter(145)); painter.drawRect(QRectF(-32, -12, 64, 6));
         painter.drawLine(QPointF(-44, 17), QPointF(-60, 35)); painter.drawLine(QPointF(44, 17), QPointF(60, 35));
     } else if (kind == 3) {
         for (int i = 0; i < 6; ++i) {
@@ -121,9 +169,12 @@ void paintEnemyShape(QPainter &painter, int kind, const QPointF &p, const QColor
         }
         painter.setBrush(color); painter.drawEllipse(QPointF(43, std::sin(motion + 4) * 8), 16, 16);
         painter.setBrush(QColor(4, 9, 18)); painter.drawEllipse(QPointF(49, -2), 4, 4);
+        painter.setPen(QPen(color.lighter(145), 2)); painter.drawLine(QPointF(-45, -18), QPointF(42, -18));
     } else if (kind == 4) {
         QPolygonF body{QPointF(0, -34), QPointF(39, 0), QPointF(0, 34), QPointF(-39, 0)};
         painter.drawPolygon(body); painter.setBrush(color); painter.drawEllipse(QPointF(0, 0), 10, 10);
+        painter.setBrush(QColor(5, 10, 18)); painter.drawEllipse(QPointF(0, 0), 4, 4);
+        painter.setPen(QPen(color.lighter(150), 2)); painter.drawLine(QPointF(0, -27), QPointF(0, 27));
         painter.drawLine(QPointF(-32, -16), QPointF(-56, -28)); painter.drawLine(QPointF(32, -16), QPointF(56, -28));
         painter.drawEllipse(QPointF(-58, -29), 15, 5); painter.drawEllipse(QPointF(58, -29), 15, 5);
     } else {
@@ -187,7 +238,7 @@ bool RaidBattle::start(int viewers, qint64 nowMs, bool testMode)
     for (int index = 0; index < displayedRaiders; ++index) {
         const QPointF position(55 + (index % columns) * horizontal + random.generateDouble() * 12,
                                205 + (index / columns) * vertical + random.generateDouble() * 10);
-        raiders_.push_back({QString(), "Blaster", position, raiderColor(index), index % 4, 0});
+        raiders_.push_back({QString(), "Blaster", position, raiderColor(index), index % 8, 0});
     }
 
     const QStringList bugs{"Syntax Crawler", "Null Wraith", "Stack Brute", "Memory Leech", "Race Drone", "NaN Glitch"};
@@ -599,19 +650,6 @@ void RaidBattle::paint(QPainter &painter, qint64 nowMs) const
     label(painter, QRectF(345, 1012, 1230, 27), QString::fromUtf8("!fire or 🔥 = FIREWALL DAMAGE   //   !ice or ❄️ = SLOW BUGS"),
           17, QColor(218, 231, 237), Qt::AlignCenter);
 
-    const qint64 introAge = nowMs - startedMs_;
-    if (introAge < 4800) {
-        const double introOpacity = introAge < 3600 ? 1.0 : std::clamp((4800.0 - introAge) / 1200.0, 0.0, 1.0);
-        painter.save();
-        painter.setOpacity(introOpacity);
-        painter.setPen(QPen(cyan, 3));
-        painter.setBrush(QColor(3, 14, 24, 238));
-        painter.drawRoundedRect(QRectF(570, 155, 780, 112), 14, 14);
-        label(painter, QRectF(600, 168, 720, 48), "RAID INCOMING", 34, cyan, Qt::AlignCenter);
-        label(painter, QRectF(600, 214, 720, 34), QString("%1 VIEWERS DEPLOYED").arg(viewers_), 19, Qt::white, Qt::AlignCenter);
-        painter.restore();
-    }
-
     if (nowMs < iceUntilMs_) {
         painter.setPen(QPen(QColor(70, 190, 255, 65), 2));
         for (int y = 0; y < 1080; y += 18) painter.drawLine(0, y, 1920, y);
@@ -675,9 +713,10 @@ void RaidBattle::paint(QPainter &painter, qint64 nowMs) const
             painter.translate((death - 0.5) * 16, -death * 45);
             painter.scale(1.0 + death * 0.7, std::max(0.08, 1.0 - death));
         }
+        static const QColor enemyPalette[]{QColor(255, 60, 105), QColor(182, 92, 255), QColor(255, 126, 48),
+                                            QColor(76, 225, 174), QColor(255, 181, 45), QColor(255, 75, 205)};
         const QColor enemyColor = nowMs < iceUntilMs_ ? QColor(70, 190, 255)
-            : nowMs < enemy.flashUntilMs ? Qt::white
-            : enemy.kind == 3 ? QColor(190, 85, 255) : enemy.kind == 4 ? QColor(255, 145, 35) : red;
+            : nowMs < enemy.flashUntilMs ? Qt::white : enemyPalette[enemy.kind % 6];
         const QPointF bob(0, dying ? 0 : std::sin(nowMs / 210.0 + enemy.id) * 5);
         paintEnemyShape(painter, enemy.kind, enemy.position + bob, enemyColor, enemy.visualSeed, nowMs / 160.0);
         painter.restore();
@@ -729,6 +768,23 @@ void RaidBattle::paint(QPainter &painter, qint64 nowMs) const
         painter.setPen(QPen(projectile.color, projectile.weapon == "Ban Hammer" ? 9 : 4, Qt::SolidLine, Qt::RoundCap));
         painter.drawLine(tail, projectile.position); painter.setBrush(projectile.color); painter.setPen(Qt::NoPen);
         painter.drawEllipse(projectile.position, projectile.weapon == "Ban Hammer" ? 10 : 6, projectile.weapon == "Ban Hammer" ? 10 : 6);
+    }
+
+    // Keep the opening card above the battlefield. Units begin deploying
+    // underneath it, but can no longer cut through its copy or border.
+    const qint64 introAge = nowMs - startedMs_;
+    if (introAge < 4800) {
+        const double introOpacity = introAge < 3600 ? 1.0 : std::clamp((4800.0 - introAge) / 1200.0, 0.0, 1.0);
+        painter.save();
+        painter.setOpacity(introOpacity);
+        painter.setPen(QPen(QColor(33, 231, 245, 65), 12));
+        painter.setBrush(QColor(1, 8, 17, 252));
+        painter.drawRoundedRect(QRectF(558, 143, 804, 136), 18, 18);
+        painter.setPen(QPen(cyan, 3));
+        painter.drawRoundedRect(QRectF(570, 155, 780, 112), 14, 14);
+        label(painter, QRectF(600, 168, 720, 48), "RAID INCOMING", 34, cyan, Qt::AlignCenter);
+        label(painter, QRectF(600, 214, 720, 34), QString("%1 VIEWERS DEPLOYED").arg(viewers_), 19, Qt::white, Qt::AlignCenter);
+        painter.restore();
     }
 
     if (roadblock_ != Roadblock::None) {

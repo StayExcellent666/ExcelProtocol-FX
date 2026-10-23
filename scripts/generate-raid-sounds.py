@@ -96,37 +96,41 @@ def save(name: str, channels, target_peak: float = .66, compress: bool = False) 
 
 
 def weapon_shot(kind: str, number: int) -> None:
-    """Give every weapon a recognizable low-register signature."""
+    """Give every weapon a crisp transient and recognizable low-register body."""
     if kind == "blaster":
-        sound = buffer(.28)
+        sound = buffer(.34)
         base = (285, 330)[number - 1]
-        tone(sound, 0, .2, base * 1.4, base * .62, .38, "saw", -.18)
-        tone(sound, .018, .21, base * .72, base * .42, .3, "sine", .2)
-        noise(sound, 0, .09, .16, 100 + number, color=.62)
-        echo(sound, .065, .13)
+        tone(sound, 0, .22, base * 1.8, base * .55, .48, "saw", -.18)
+        tone(sound, 0, .16, 92, 54, .42, "sine", .12)
+        tone(sound, .004, .055, 1850, 690, .19, "square", -.08)
+        noise(sound, 0, .105, .3, 100 + number, color=.78)
+        echo(sound, .07, .16)
     elif kind == "plasma":
         sound = buffer(.38)
         base = (175, 205)[number - 1]
-        tone(sound, 0, .3, base, base * 1.48, .34, "sine", -.2, 18)
-        tone(sound, .025, .28, base * .7, base * 1.12, .25, "saw", .22, 9)
-        noise(sound, .02, .16, .12, 120 + number, color=.18)
-        echo(sound, .085, .18)
+        tone(sound, 0, .3, base, base * 1.62, .43, "sine", -.2, 18)
+        tone(sound, .018, .28, base * .72, base * 1.18, .32, "saw", .22, 9)
+        tone(sound, 0, .08, 1280, 360, .18, "pulse")
+        noise(sound, 0, .16, .23, 120 + number, color=.54)
+        echo(sound, .085, .21)
     elif kind == "railgun":
         sound = buffer(.5)
         base = (82, 96)[number - 1]
-        tone(sound, 0, .31, base, base * 3.2, .33, "sine", -.28, 7)
-        tone(sound, .22, .2, base * 2.1, base * .7, .4, "saw", .25)
-        noise(sound, .21, .1, .2, 140 + number, color=.72)
-        echo(sound, .09, .22)
+        tone(sound, 0, .31, base, base * 3.2, .4, "sine", -.28, 7)
+        tone(sound, .12, .25, base * 3.4, base * .64, .54, "saw", .25)
+        tone(sound, .115, .07, 2200, 410, .24, "square")
+        noise(sound, .11, .13, .38, 140 + number, color=.82)
+        echo(sound, .095, .26)
     else:  # Ban Hammer
         sound = buffer(.58)
         base = (52, 61)[number - 1]
-        tone(sound, 0, .42, base * 1.4, base * .62, .58, "sine", -.08)
-        tone(sound, .006, .29, base * 4.1, base * 1.65, .31, "square", .14)
-        noise(sound, 0, .2, .31, 160 + number, color=.08)
-        noise(sound, .06, .24, .14, 170 + number, color=.55)
-        echo(sound, .12, .17)
-    save(f"raid-shot-{kind}-{number}", sound)
+        tone(sound, 0, .44, base * 1.6, base * .54, .7, "sine", -.08)
+        tone(sound, 0, .27, base * 5.2, base * 1.5, .42, "square", .14)
+        tone(sound, 0, .055, 1450, 270, .22, "saw")
+        noise(sound, 0, .2, .46, 160 + number, color=.12)
+        noise(sound, .045, .26, .22, 170 + number, color=.62)
+        echo(sound, .12, .2)
+    save(f"raid-shot-{kind}-{number}", sound, target_peak=.78)
 
 
 def enemy_hit(number: int) -> None:
