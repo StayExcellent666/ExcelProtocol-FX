@@ -49,7 +49,10 @@ int main(int argc, char **argv)
                     if (qAlpha(first.pixel(x, y))) visible = true;
                 }
             check(visible, "each effect produces visible pixels");
-            if (def.id != "fog") check(maximumAlpha == 255, "non-fog effects contain fully opaque pixels");
+            if (def.id != "fog") {
+                const std::string message = def.id.toStdString() + " contains fully opaque pixels";
+                check(maximumAlpha == 255, message.c_str());
+            }
         }
         check(manager.trigger("ink_splatter", 60000) == "invalid_duration", "hard duration limit");
         check(manager.trigger("ink_splatter", -1, std::numeric_limits<double>::quiet_NaN()) == "invalid_intensity", "NaN rejected");
@@ -81,6 +84,14 @@ int main(int argc, char **argv)
         check(manager.command({{"type", "trigger_effect"}, {"event_id", "bad-2"}, {"effect", "fog"}, {"duration_ms", 1.5}}).value("status") == "invalid_duration", "fractional durations rejected");
         const auto catalog = manager.command({{"type", "list_effects"}}).value("effects").toArray();
         check(catalog.size() == manager.definitions().size(), "effect catalog reports every effect");
+        QStringList effectIds;
+        for (const auto &item : catalog) effectIds << item.toObject().value("id").toString();
+        check(!effectIds.contains("screen_cracks"), "screen cracks removed from catalog");
+        check(!effectIds.contains("creepy_eyes"), "creepy eyes removed from catalog");
+        check(effectIds.contains("neon_lightning"), "neon lightning included in catalog");
+        check(effectIds.contains("data_storm"), "data storm included in catalog");
+        check(effectIds.contains("security_lockdown"), "security lockdown included in catalog");
+        check(effectIds.contains("gravity_well"), "gravity well included in catalog");
         check(catalog.at(0).toObject().contains("default_duration_ms"), "effect catalog reports default duration");
         const auto inkMetadata = catalog.at(1).toObject().value("parameters").toObject();
         check(inkMetadata.value("splatters").toObject().value("max").toInt() == 12, "effect catalog reports parameter limits");

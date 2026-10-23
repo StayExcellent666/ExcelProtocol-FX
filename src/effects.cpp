@@ -133,23 +133,6 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
                 p.setPen(Qt::NoPen);
             }
         }
-    } else if (effect.id == "screen_cracks") {
-        const QPointF center(between(random, 500, 1420), between(random, 260, 820));
-        for (int ray = 0; ray < 18; ++ray) {
-            QPointF previous = center;
-            const double angle = ray * 2 * pi / 18 + between(random, -0.1, 0.1);
-            for (int segment = 1; segment <= 6; ++segment) {
-                const double distance = segment * between(random, 50, 95) * (0.4 + strength);
-                const QPointF next = center + QPointF(std::cos(angle) * distance + between(random, -18, 18),
-                                                     std::sin(angle) * distance + between(random, -18, 18));
-                p.setPen(QPen(QColor(0, 0, 0), 4));
-                p.drawLine(previous + QPointF(2, 2), next + QPointF(2, 2));
-                p.setPen(QPen(QColor(211, 245, 255), 1.6));
-                p.drawLine(previous, next);
-                if (segment % 2 == 0) p.drawLine(next, next + QPointF(std::cos(angle + 0.8) * 75, std::sin(angle + 0.8) * 75));
-                previous = next;
-            }
-        }
     } else if (effect.id == "error_invasion") {
         const QStringList messages{"Your gaming license has been revoked.", "Unexpected lack of skill.", "Please reinstall your reflexes.",
                                    "Aim calibration: no aim detected.", "Cannot locate victory.dll."};
@@ -188,22 +171,6 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
         gradient.setColorAt(0.25, QColor(0, 0, 0, static_cast<int>(115 + 80 * strength)));
         gradient.setColorAt(1, QColor(0, 3, 9));
         p.fillRect(QRectF(0, 0, 1920, 1080), gradient);
-    } else if (effect.id == "creepy_eyes") {
-        for (int i = 0; i < 6; ++i) {
-            double x = between(random, 80, 1720), y = i % 2 ? between(random, 860, 1000) : between(random, 60, 180);
-            x += std::sin(seconds + i) * 14;
-            const double blink = std::pow(std::max(0.0, std::sin(seconds * 0.8 + i * 1.7)), 12);
-            const double open = 1 - blink * 0.95;
-            for (int eye = 0; eye < 2; ++eye) {
-                const QPointF center(x + eye * 65, y);
-                QRadialGradient glow(center, 50);
-                glow.setColorAt(0, cyan());
-                glow.setColorAt(1, cyan(0));
-                p.setBrush(glow); p.setPen(Qt::NoPen); p.drawEllipse(center, 50, 40 * open);
-                p.setBrush(cyan()); p.drawEllipse(center, 20, 11 * open);
-                p.setBrush(QColor(2, 14, 18)); p.drawEllipse(center, 5, 10 * open);
-            }
-        }
     } else if (effect.id == "fog") {
         for (int i = 0; i < 18; ++i) {
             const QPointF center(between(random, -100, 2000) + std::sin(seconds * 0.25 + i) * 75,
@@ -229,16 +196,155 @@ void paintEffect(QPainter &p, const ActiveEffect &effect, qint64 now, double mas
             cursor.lineTo(20, 48); cursor.lineTo(28, 44); cursor.lineTo(19, 26); cursor.lineTo(34, 26); cursor.closeSubpath();
             p.setPen(QPen(QColor(10, 22, 30), 2)); p.setBrush(i % 3 ? QColor(235, 249, 255) : cyan()); p.drawPath(cursor); p.restore();
         }
-    } else if (effect.id == "jumpscare_lite") {
-        const double appearance = clamp(seconds * 7, 0, 1);
-        p.setOpacity(fade * appearance);
+    } else if (effect.id == "neon_lightning") {
+        const QColor electric(41, 239, 255);
+        const QColor violet(170, 74, 255);
+        for (int bolt = 0; bolt < 5 + static_cast<int>(strength * 5); ++bolt) {
+            const bool horizontal = bolt % 2 == 0;
+            QPainterPath path;
+            QPointF point(horizontal ? -30.0 : between(random, 120, 1800),
+                          horizontal ? between(random, 90, 990) : -30.0);
+            path.moveTo(point);
+            for (int segment = 1; segment <= 10; ++segment) {
+                const double phase = seconds * (5.0 + strength * 3.0) + bolt * 0.7 + segment;
+                point = horizontal
+                    ? QPointF(segment * 204.0 - 40.0, point.y() + std::sin(phase) * between(random, 22, 65))
+                    : QPointF(point.x() + std::sin(phase) * between(random, 22, 65), segment * 116.0 - 40.0);
+                path.lineTo(point);
+            }
+            p.setPen(QPen(QColor(0, 226, 255, 45), 18, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawPath(path);
+            p.setPen(QPen(bolt % 3 ? electric : violet, 3.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+            p.drawPath(path);
+        }
+        p.setPen(QPen(QColor(137, 248, 255, 90), 1));
+        for (int i = 0; i < 24; ++i) {
+            const QPointF spark(between(random, 0, 1920), between(random, 0, 1080));
+            p.drawLine(spark, spark + QPointF(between(random, -18, 18), between(random, -18, 18)));
+        }
+    } else if (effect.id == "data_storm") {
+        p.fillRect(QRectF(0, 0, 1920, 1080), QColor(0, 8, 13, static_cast<int>(55 + strength * 70)));
+        QFont code("Consolas", 22);
+        code.setPixelSize(22);
+        code.setBold(true);
+        p.setFont(code);
+        const QString glyphs = "01ABCDEF<>/{}[]#";
+        const int columns = 18 + static_cast<int>(strength * 12);
+        for (int column = 0; column < columns; ++column) {
+            const double x = (column + 0.5) * 1920.0 / columns;
+            const double speed = between(random, 95, 240) * (0.65 + strength * 0.7);
+            const double head = std::fmod(between(random, 0, 1080) + seconds * speed, 1320.0) - 120.0;
+            const int trail = 6 + static_cast<int>(strength * 8);
+            for (int row = 0; row < trail; ++row) {
+                const int alpha = std::max(20, 240 - row * (210 / trail));
+                p.setPen(row == 0 ? QColor(225, 255, 255) : QColor(31, 232, 214, alpha));
+                const int glyph = static_cast<int>((effect.seed + column * 11 + row * 7 + static_cast<int>(seconds * 8)) % glyphs.size());
+                p.drawText(QPointF(x, head - row * 34), QString(glyphs.at(glyph)));
+            }
+        }
+        text(p, QRectF(45, 995, 900, 40), "// DATA STORM: PACKET INTEGRITY LOST", 21, QColor(106, 255, 238));
+        p.fillRect(QRectF(45, 1041, 520 * (0.45 + strength * 0.55), 4), QColor(31, 232, 214));
+    } else if (effect.id == "security_lockdown") {
+        const QColor alert(255, 47, 112);
+        const double sweep = std::fmod(seconds * (250 + strength * 260), 1220.0) - 70.0;
+        p.fillRect(QRectF(0, 0, 1920, 52), QColor(10, 12, 19, 230));
+        p.fillRect(QRectF(0, 1028, 1920, 52), QColor(10, 12, 19, 230));
+        for (int x = -80; x < 2000; x += 100) {
+            p.setBrush((x / 100) % 2 ? alert : QColor(20, 24, 33));
+            p.setPen(Qt::NoPen);
+            QPolygonF stripe;
+            stripe << QPointF(x, 0) << QPointF(x + 55, 0) << QPointF(x + 95, 52) << QPointF(x + 40, 52);
+            p.drawPolygon(stripe);
+            QPolygonF lower;
+            lower << QPointF(x, 1028) << QPointF(x + 55, 1028) << QPointF(x + 95, 1080) << QPointF(x + 40, 1080);
+            p.drawPolygon(lower);
+        }
+        QLinearGradient scan(0, sweep - 65, 0, sweep + 65);
+        scan.setColorAt(0, QColor(255, 47, 112, 0));
+        scan.setColorAt(0.5, QColor(255, 47, 112, static_cast<int>(70 + strength * 80)));
+        scan.setColorAt(1, QColor(255, 47, 112, 0));
+        p.fillRect(QRectF(0, sweep - 65, 1920, 130), scan);
         p.translate(960, 540);
-        p.scale(0.75 + appearance * 0.25, 0.75 + appearance * 0.25);
-        p.setBrush(QColor(5, 15, 24)); p.setPen(QPen(cyan(), 8));
-        p.drawRoundedRect(QRectF(-255, -240, 510, 470), 115, 115);
-        p.setBrush(cyan()); p.setPen(Qt::NoPen); p.drawEllipse(QPointF(-105, -70), 60, 35); p.drawEllipse(QPointF(105, -70), 60, 35);
-        p.setPen(QPen(cyan(), 13, Qt::SolidLine, Qt::RoundCap)); p.drawArc(QRectF(-130, -10, 260, 150), 180 * 16, 180 * 16);
-        text(p, QRectF(-300, 260, 600, 60), "BOO.exe", 42, cyan(), Qt::AlignCenter);
+        p.rotate(seconds * 28);
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(QColor(255, 47, 112, 165), 4));
+        p.drawEllipse(QPointF(0, 0), 210, 210);
+        p.drawArc(QRectF(-285, -285, 570, 570), 20 * 16, 105 * 16);
+        p.drawArc(QRectF(-285, -285, 570, 570), 200 * 16, 105 * 16);
+        p.rotate(-seconds * 28);
+        text(p, QRectF(-500, -58, 1000, 90), "SECURITY LOCKDOWN", 48, Qt::white, Qt::AlignCenter);
+        text(p, QRectF(-500, 32, 1000, 44), "UNAUTHORIZED INPUT DETECTED", 21, alert, Qt::AlignCenter);
+    } else if (effect.id == "gravity_well") {
+        const QPointF center(960 + std::sin(seconds * 0.55) * 95, 540 + std::cos(seconds * 0.43) * 55);
+        QRadialGradient voidGradient(center, 380);
+        voidGradient.setColorAt(0, QColor(0, 0, 0));
+        voidGradient.setColorAt(0.32, QColor(4, 2, 16, 225));
+        voidGradient.setColorAt(0.68, QColor(79, 23, 125, static_cast<int>(85 + strength * 70)));
+        voidGradient.setColorAt(1, QColor(19, 229, 238, 0));
+        p.setBrush(voidGradient);
+        p.drawEllipse(center, 380, 380);
+        p.setBrush(Qt::NoBrush);
+        for (int ring = 0; ring < 6; ++ring) {
+            p.save();
+            p.translate(center);
+            p.rotate((ring % 2 ? -1 : 1) * seconds * (18 + ring * 5));
+            p.scale(1.0, 0.30 + ring * 0.035);
+            p.setPen(QPen(ring % 2 ? QColor(183, 75, 255, 185) : cyan(185), 2.5 + ring * 0.35));
+            p.drawArc(QRectF(-190 - ring * 37, -190 - ring * 37, 380 + ring * 74, 380 + ring * 74),
+                      (ring * 43) * 16, (185 + ring * 17) * 16);
+            p.restore();
+        }
+        for (int i = 0; i < 55; ++i) {
+            const double angle = between(random, 0, 2 * pi) + seconds * between(random, 0.25, 1.2);
+            const double radius = between(random, 120, 650) * (1.0 - 0.06 * std::sin(seconds * 2 + i));
+            const QPointF particle = center + QPointF(std::cos(angle) * radius, std::sin(angle) * radius * 0.48);
+            p.setBrush(i % 4 ? cyan(190) : QColor(204, 96, 255, 220));
+            p.drawEllipse(particle, between(random, 2, 7), between(random, 2, 7));
+        }
+    } else if (effect.id == "jumpscare_lite") {
+        const double appearance = clamp(seconds * 10, 0, 1);
+        const double pulse = 1.0 + std::sin(seconds * 16) * 0.025;
+        const double jitterX = std::sin(seconds * 73) * 7 * strength;
+        const double jitterY = std::cos(seconds * 61) * 5 * strength;
+        QRadialGradient darkness(QPointF(960, 540), 1050);
+        darkness.setColorAt(0, QColor(8, 0, 13, 135));
+        darkness.setColorAt(0.48, QColor(1, 2, 7, 215));
+        darkness.setColorAt(1, QColor(0, 0, 0, 250));
+        p.fillRect(QRectF(0, 0, 1920, 1080), darkness);
+        p.setOpacity(fade * appearance);
+        p.save();
+        p.translate(960 + jitterX, 520 + jitterY);
+        p.scale((0.42 + appearance * 0.78) * pulse, (0.42 + appearance * 0.78) * pulse);
+        QPainterPath head;
+        head.moveTo(-255, -275); head.quadTo(0, -410, 255, -275);
+        head.lineTo(220, 155); head.quadTo(0, 330, -220, 155); head.closeSubpath();
+        p.setBrush(QColor(3, 4, 9));
+        p.setPen(QPen(QColor(255, 33, 105, 85), 24, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawPath(head.translated(-8, 5));
+        p.setPen(QPen(cyan(), 7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawPath(head);
+        QPainterPath leftEye; leftEye.moveTo(-190, -105); leftEye.lineTo(-35, -48); leftEye.lineTo(-175, 5); leftEye.closeSubpath();
+        QPainterPath rightEye; rightEye.moveTo(190, -105); rightEye.lineTo(35, -48); rightEye.lineTo(175, 5); rightEye.closeSubpath();
+        p.setBrush(QColor(232, 255, 255)); p.setPen(Qt::NoPen); p.drawPath(leftEye); p.drawPath(rightEye);
+        p.setBrush(QColor(255, 25, 94));
+        p.drawEllipse(QPointF(-105, -49), 13, 34); p.drawEllipse(QPointF(105, -49), 13, 34);
+        QPainterPath mouth; mouth.moveTo(-175, 72); mouth.quadTo(0, 230, 175, 72); mouth.quadTo(0, 280, -175, 72); mouth.closeSubpath();
+        p.setBrush(QColor(0, 0, 0)); p.setPen(QPen(QColor(255, 33, 105), 6)); p.drawPath(mouth);
+        p.setBrush(QColor(223, 255, 255)); p.setPen(Qt::NoPen);
+        for (int tooth = -4; tooth <= 4; ++tooth) {
+            const double x = tooth * 34.0;
+            QPolygonF fang; fang << QPointF(x - 14, 96) << QPointF(x + 14, 96) << QPointF(x, 148 + (tooth % 2 ? 22 : 0));
+            p.drawPolygon(fang);
+        }
+        p.restore();
+        p.setOpacity(fade * appearance);
+        for (int i = 0; i < 14; ++i) {
+            const double y = between(random, 0, 1080);
+            const double drift = std::sin(seconds * 26 + i) * 75;
+            p.fillRect(QRectF(between(random, 0, 1200) + drift, y, between(random, 120, 620), between(random, 2, 8)),
+                       i % 3 ? QColor(30, 238, 241, 95) : QColor(255, 33, 105, 120));
+        }
+        text(p, QRectF(0, 935, 1920, 70), "DON'T LOOK AWAY", 42, QColor(255, 44, 112), Qt::AlignCenter);
     }
     p.restore();
 }
@@ -335,14 +441,16 @@ EffectManager::EffectManager(QObject *parent)
     definitions_ = {
         {"crash", "Excellent.exe Crashed", "Fictional crash with automatic recovery.", "System", 5000, 1000, 15000, 15000, 0.65, 1, true, true, {{"style", 0}}},
         {"ink_splatter", "Ink Splatter", "Rounded organic ink shapes and gradual drips.", "Obstruction", 8000, 1000, 30000, 10000, 0.65, 1, true, false, {{"splatters", 5}, {"drips", true}, {"opacity", 1.0}, {"size", 1.0}}},
-        {"screen_cracks", "Screen Cracks", "Simulated glass impact and fading fracture lines.", "Surface", 7000},
         {"error_invasion", "Error Window Invasion", "Fictional error windows recover automatically.", "System", 7000},
         {"corruption", "System Corruption", "Localized digital artifacts, scanlines, and text.", "System", 6000},
         {"darkness", "Darkness Protocol", "Animated transparent edge shadows.", "Atmosphere", 8000},
-        {"creepy_eyes", "Creepy Eyes", "Blinking neon cyan eyes near the screen edges.", "Atmosphere", 7000},
         {"fog", "Fogged Screen", "Drifting translucent fog and condensation droplets.", "Atmosphere", 8000},
         {"mouse_invasion", "Fake Mouse Invasion", "Visual cursors only; never controls your mouse.", "Playful", 6000},
-        {"jumpscare_lite", "Jumpscare Lite", "Brief playful cyan face; no flashes or sound.", "Playful", 1500, 500, 4000, 15000, 0.5, 0.5, true, true, {}},
+        {"neon_lightning", "Neon Lightning", "Animated cyan and violet electrical arcs tear across the screen.", "Energy", 5000},
+        {"data_storm", "Data Storm", "A dense cascade of glowing code rains through the scene.", "Cyber", 7000},
+        {"security_lockdown", "Security Lockdown", "Hazard borders, a scanning beam, and a rotating security reticle.", "System", 6500},
+        {"gravity_well", "Gravity Well", "A dark neon vortex pulls orbiting particles toward its core.", "Space", 8000},
+        {"jumpscare_lite", "Protocol Jumpscare", "A sudden distorted face reveal with darkened edges and glitch trails; no strobe.", "Horror", 1800, 500, 4500, 15000, 0.7, 0.5, true, true, {}},
     };
     clock_.start();
     overlay_ = std::make_unique<DesktopOverlay>([this] { clear(); });
