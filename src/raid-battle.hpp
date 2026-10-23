@@ -74,6 +74,12 @@ private:
         QString username;
         int damage = 0;
     };
+    struct RecentAttack {
+        QString username;
+        QString weapon;
+        int damage = 0;
+        qint64 startedMs = 0;
+    };
 
     void deployRoadblock(qint64 nowMs);
     void applyDamage(const QString &username, int enemyId, double damage, qint64 nowMs);
@@ -113,12 +119,14 @@ private:
     int defeatedEnemies_ = 0;
     int nextRaiderSlot_ = 0;
     QHash<QString, int> raiderSlots_;
+    QHash<QString, qint64> lastAttackMs_;
     QHash<QString, int> damageLedger_;
     QVector<Raider> raiders_;
     QVector<Projectile> projectiles_;
     QVector<Enemy> enemies_;
     QVector<Impact> impacts_;
     QVector<Score> leaderboard_;
+    QVector<RecentAttack> recentAttacks_;
 };
 
 } // namespace fx

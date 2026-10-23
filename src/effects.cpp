@@ -645,6 +645,8 @@ void EffectManager::tick()
             trigger(next.value("effect").toString(), next.value("duration_ms").toInt(-1), next.value("intensity").toDouble(-1), next.value("parameters").toObject(), "queue");
         }
     } else {
+        const int targetInterval = raid_.visible() && active_.isEmpty() ? 50 : 33;
+        if (timer_.interval() != targetInterval) timer_.setInterval(targetInterval);
         QImage image = active_.isEmpty() ? QImage(renderSize_, QImage::Format_ARGB32)
                                         : renderEffects(renderSize_, active_, now, overallIntensity_);
         if (image.isNull()) { clear(); return; }
@@ -709,7 +711,7 @@ void EffectManager::applyDisplaySettings()
 
 QString EffectManager::displayDescription() const
 {
-    return QString("Shared render surface: %1 x %2, 30 fps while active.\n%3 ExcelProtocol FX source(s) currently loaded.")
+    return QString("Shared render surface: %1 x %2, 30 fps for effects / 20 fps for Raid Battle only.\n%3 ExcelProtocol FX source(s) currently loaded.")
         .arg(renderSize_.width()).arg(renderSize_.height()).arg(frame_->sourceCount.load());
 }
 
@@ -757,7 +759,8 @@ QJsonObject EffectManager::command(const QJsonObject &request)
             return reply(false, "invalid_raid_chat");
         const QString status = raid_.chat(request.value("username").toString(), request.value("role").toString(),
                                           request.value("message").toString(), clock_.elapsed());
-        const bool accepted = status == "attack_queued" || status == "attack_blocked" || status == "roadblock_cleared";
+        const bool accepted = status == "attack_queued" || status == "attack_blocked"
+            || status == "attack_cooldown" || status == "roadblock_cleared";
         QJsonObject response = reply(accepted, status); response.insert("raid", raidStatus()); return response;
     }
     if (type == "raid_end") {

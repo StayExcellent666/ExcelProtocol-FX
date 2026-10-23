@@ -18,14 +18,23 @@ constexpr int maximumViewers = 1000000;
 constexpr int maximumRaiders = 48;
 constexpr int maximumProjectiles = 240;
 constexpr int maximumVisibleEnemies = 5;
+constexpr qint64 attackCooldownMs = 900;
+
+const QFont &raidFont(int pixels)
+{
+    static QHash<int, QFont> fonts;
+    auto found = fonts.constFind(pixels);
+    if (found != fonts.cend()) return found.value();
+    QFont font("Cascadia Mono");
+    font.setStyleHint(QFont::Monospace);
+    font.setPixelSize(pixels);
+    return fonts.insert(pixels, font).value();
+}
 
 void label(QPainter &painter, const QRectF &rect, const QString &value, int pixels,
            const QColor &color = Qt::white, int flags = Qt::AlignLeft | Qt::AlignVCenter)
 {
-    QFont font("Cascadia Mono");
-    font.setStyleHint(QFont::Monospace);
-    font.setPixelSize(pixels);
-    painter.setFont(font);
+    painter.setFont(raidFont(pixels));
     painter.setPen(color);
     painter.drawText(rect, flags, value);
 }
@@ -163,7 +172,7 @@ bool RaidBattle::start(int viewers, qint64 nowMs, bool testMode)
     clear();
     phase_ = Phase::Fighting;
     viewers_ = viewers;
-    maximumHp_ = std::floor(1000.0 * std::pow(static_cast<double>(viewers), 0.7));
+    maximumHp_ = std::floor(1500.0 * std::pow(static_cast<double>(viewers), 0.7));
     hp_ = maximumHp_;
     startedMs_ = lastTickMs_ = nowMs;
     testMode_ = testMode;
@@ -243,6 +252,8 @@ void RaidBattle::spawnAttack(const QString &username, const QString &weapon, int
         : weapon == "Plasma Rifle" ? QColor(102, 255, 90) : QColor(255, 213, 70);
     projectiles_.push_back({username, weapon, raider.position + QPointF(35, 21), focusedEnemyId(),
                             static_cast<double>(damage), color});
+    recentAttacks_.prepend({username, weapon, damage, nowMs});
+    if (recentAttacks_.size() > 4) recentAttacks_.resize(4);
 }
 
 QString RaidBattle::chat(const QString &rawUsername, const QString &rawRole,
@@ -254,29 +265,37 @@ QString RaidBattle::chat(const QString &rawUsername, const QString &rawRole,
     const QString role = rawRole.trimmed().toLower();
     if (!role.isEmpty() && role != "default" && role != "viewer" && role != "sub"
         && role != "subscriber" && role != "vip" && role != "mod") return "invalid_raid_role";
-    ++interactionCount_;
     const QString command = message.trimmed().toLower();
     if (roadblock_ == Roadblock::InfiniteLoop && command == "break;") {
+        ++interactionCount_;
         roadblock_ = Roadblock::None;
         if (onSound) onSound("raid-unlock");
         return "roadblock_cleared";
     }
     if (roadblock_ == Roadblock::MergeConflict && command == "!git push --force") {
+        ++interactionCount_;
         roadblock_ = Roadblock::None;
         if (onSound) onSound("raid-unlock");
         return "roadblock_cleared";
     }
     bool environmentTriggered = false;
-    if (message.contains(QString::fromUtf8("🔥"))) {
+    if (message.contains(QString::fromUtf8("🔥")) || command == "!fire") {
         firewallUntilMs_ = std::min(nowMs + 10000, std::max(firewallUntilMs_, nowMs) + 5000);
         if (onSound) onSound("raid-fire");
         environmentTriggered = true;
     }
-    if (message.contains(QString::fromUtf8("❄️"))) {
+    if (message.contains(QString::fromUtf8("❄️")) || command == "!ice") {
         iceUntilMs_ = std::max(iceUntilMs_, nowMs + 5000);
         if (onSound) onSound("raid-ice");
         environmentTriggered = true;
     }
+    const auto previousAttack = lastAttackMs_.constFind(username);
+    if (previousAttack != lastAttackMs_.cend() && nowMs - previousAttack.value() < attackCooldownMs) {
+        if (environmentTriggered) ++interactionCount_;
+        return "attack_cooldown";
+    }
+    lastAttackMs_.insert(username, nowMs);
+    ++interactionCount_;
     int damage = 10;
     QString weapon = "Blaster";
     if (role == "mod") { damage = 50; weapon = "Ban Hammer"; }
@@ -334,7 +353,8 @@ void RaidBattle::applyDamage(const QString &username, int enemyId, double damage
 void RaidBattle::driveTestRaid(qint64 nowMs)
 {
     if (!testMode_ || phase_ != Phase::Fighting) return;
-    const qint64 interval = std::clamp<qint64>(720 - viewers_ * 8, 170, 620);
+    qint64 interval = std::clamp<qint64>(720 - viewers_ * 8, 170, 620);
+    if (viewers_ == 1) interval = attackCooldownMs;
     if (nowMs - lastTestAttackMs_ >= interval) {
         lastTestAttackMs_ = nowMs;
         const int member = static_cast<int>(sequence_++ % static_cast<quint32>(std::max(1, static_cast<int>(raiders_.size()))));
@@ -484,12 +504,14 @@ void RaidBattle::clear()
     interactionCount_ = defeatedEnemies_ = nextRaiderSlot_ = 0;
     lastShotSoundMs_ = lastHitSoundMs_ = lastSpawnSoundMs_ = -1000;
     raiderSlots_.clear();
+    lastAttackMs_.clear();
     raiders_.clear();
     damageLedger_.clear();
     projectiles_.clear();
     enemies_.clear();
     impacts_.clear();
     leaderboard_.clear();
+    recentAttacks_.clear();
 }
 
 QJsonObject RaidBattle::status(qint64 nowMs) const
@@ -545,6 +567,19 @@ void RaidBattle::paint(QPainter &painter, qint64 nowMs) const
         painter.restore(); return;
     }
 
+    // A cheap two-layer vignette keeps the overlay readable without paying
+    // for a full-screen radial-gradient blend on every rendered frame.
+    painter.fillRect(QRectF(0, 0, 1920, 1080), QColor(0, 5, 13, 76));
+    QPainterPath vignette;
+    vignette.setFillRule(Qt::OddEvenFill);
+    vignette.addRect(QRectF(0, 0, 1920, 1080));
+    vignette.addRoundedRect(QRectF(115, 105, 1690, 850), 110, 110);
+    painter.fillPath(vignette, QColor(0, 2, 8, 142));
+    painter.fillRect(QRectF(0, 185, 1110, 745), QColor(0, 62, 78, 24));
+    painter.fillRect(QRectF(1110, 185, 810, 745), QColor(96, 5, 42, 20));
+    painter.setPen(QPen(QColor(33, 231, 245, 72), 2, Qt::DashLine));
+    painter.drawLine(QPointF(1110, 205), QPointF(1110, 915));
+
     painter.setPen(QPen(QColor(42, 78, 94), 2)); painter.setBrush(QColor(4, 11, 20, 224));
     painter.drawRoundedRect(QRectF(420, 30, 1080, 100), 12, 12);
     label(painter, QRectF(450, 41, 750, 38), "TWITCH RAID // CYBER THREAT DEFENSE", 24, cyan);
@@ -556,6 +591,26 @@ void RaidBattle::paint(QPainter &painter, qint64 nowMs) const
     label(painter, QRectF(40, 35, 340, 38), QString("RAIDERS: %1").arg(viewers_), 21, cyan);
     label(painter, QRectF(40, 72, 340, 34), QString("FIELD UNITS: %1").arg(raiders_.size()), 16, QColor(170, 210, 220));
     label(painter, QRectF(40, 105, 340, 34), QString("TIME: %1:%2").arg(secondsLeft / 60).arg(secondsLeft % 60, 2, 10, QLatin1Char('0')), 19, Qt::white);
+
+    painter.setPen(QPen(QColor(42, 108, 124, 225), 2));
+    painter.setBrush(QColor(4, 11, 20, 232));
+    painter.drawRoundedRect(QRectF(315, 972, 1290, 78), 12, 12);
+    label(painter, QRectF(345, 979, 1230, 27), "ATTACK: SEND ANY CHAT MESSAGE  //  1 SHOT PER SECOND", 19, cyan, Qt::AlignCenter);
+    label(painter, QRectF(345, 1012, 1230, 27), QString::fromUtf8("!fire or 🔥 = FIREWALL DAMAGE   //   !ice or ❄️ = SLOW BUGS"),
+          17, QColor(218, 231, 237), Qt::AlignCenter);
+
+    const qint64 introAge = nowMs - startedMs_;
+    if (introAge < 4800) {
+        const double introOpacity = introAge < 3600 ? 1.0 : std::clamp((4800.0 - introAge) / 1200.0, 0.0, 1.0);
+        painter.save();
+        painter.setOpacity(introOpacity);
+        painter.setPen(QPen(cyan, 3));
+        painter.setBrush(QColor(3, 14, 24, 238));
+        painter.drawRoundedRect(QRectF(570, 155, 780, 112), 14, 14);
+        label(painter, QRectF(600, 168, 720, 48), "RAID INCOMING", 34, cyan, Qt::AlignCenter);
+        label(painter, QRectF(600, 214, 720, 34), QString("%1 VIEWERS DEPLOYED").arg(viewers_), 19, Qt::white, Qt::AlignCenter);
+        painter.restore();
+    }
 
     if (nowMs < iceUntilMs_) {
         painter.setPen(QPen(QColor(70, 190, 255, 65), 2));
@@ -577,8 +632,37 @@ void RaidBattle::paint(QPainter &painter, qint64 nowMs) const
     for (const Raider &raider : raiders_) {
         const bool active = nowMs < raider.activeUntilMs;
         paintRaider(painter, raider.position, raider.style, raider.color, aim, active, pulse);
-        if (active && !raider.name.isEmpty())
-            label(painter, QRectF(raider.position.x() - 38, raider.position.y() - 22, 110, 18), raider.name, 11, Qt::white, Qt::AlignCenter);
+        if (active && !raider.name.isEmpty()) {
+            const QRectF attackerTag(raider.position.x() - 55, raider.position.y() - 37, 145, 27);
+            painter.setPen(QPen(raider.color, 2));
+            painter.setBrush(QColor(2, 10, 18, 232));
+            painter.drawRoundedRect(attackerTag, 6, 6);
+            label(painter, attackerTag.adjusted(7, 0, -7, 0), raider.name, 14, Qt::white, Qt::AlignCenter);
+        }
+    }
+
+    const bool hasRecentAttacks = std::any_of(recentAttacks_.cbegin(), recentAttacks_.cend(), [nowMs](const RecentAttack &attack) {
+        return nowMs - attack.startedMs < 6000;
+    });
+    if (hasRecentAttacks) {
+        painter.setPen(QPen(QColor(42, 108, 124, 225), 2));
+        painter.setBrush(QColor(4, 11, 20, 232));
+        painter.drawRoundedRect(QRectF(1515, 25, 380, 166), 12, 12);
+        label(painter, QRectF(1535, 35, 340, 27), "LIVE ATTACK FEED", 17, cyan, Qt::AlignCenter);
+        for (int index = 0; index < recentAttacks_.size(); ++index) {
+            const RecentAttack &attack = recentAttacks_[index];
+            const double age = std::max<qint64>(0, nowMs - attack.startedMs);
+            if (age >= 6000) continue;
+            const double opacity = std::clamp((6000.0 - age) / 1400.0, 0.0, 1.0);
+            const QColor weaponColor = attack.weapon == "Ban Hammer" ? QColor(255, 90, 130)
+                : attack.weapon == "Railgun" ? cyan
+                : attack.weapon == "Plasma Rifle" ? QColor(112, 255, 115) : gold;
+            painter.setOpacity(opacity);
+            label(painter, QRectF(1535, 66 + index * 27, 205, 24), attack.username, 14, Qt::white);
+            label(painter, QRectF(1740, 66 + index * 27, 135, 24), QString("%1  %2").arg(attack.weapon).arg(attack.damage),
+                  13, weaponColor, Qt::AlignRight | Qt::AlignVCenter);
+        }
+        painter.setOpacity(1.0);
     }
 
     for (const Enemy &enemy : enemies_) {
@@ -604,6 +688,13 @@ void RaidBattle::paint(QPainter &painter, qint64 nowMs) const
                 const QRectF targetBox(enemy.position.x() - 72, enemy.position.y() - 70, 144, 140);
                 painter.drawLine(targetBox.topLeft(), targetBox.topLeft() + QPointF(26, 0)); painter.drawLine(targetBox.topLeft(), targetBox.topLeft() + QPointF(0, 26));
                 painter.drawLine(targetBox.bottomRight(), targetBox.bottomRight() - QPointF(26, 0)); painter.drawLine(targetBox.bottomRight(), targetBox.bottomRight() - QPointF(0, 26));
+                painter.save();
+                painter.translate(enemy.position);
+                painter.rotate(std::fmod(nowMs / 18.0, 360.0));
+                painter.setPen(QPen(QColor(255, 205, 55, 155), 3, Qt::SolidLine, Qt::RoundCap));
+                const QRectF orbit(-83, -83, 166, 166);
+                for (int arc = 0; arc < 4; ++arc) painter.drawArc(orbit, arc * 90 * 16, 34 * 16);
+                painter.restore();
                 label(painter, QRectF(enemy.position.x() - 70, enemy.position.y() - 96, 140, 22), "FOCUS TARGET", 13, gold, Qt::AlignCenter);
             }
             label(painter, QRectF(enemy.position.x() - 90, enemy.position.y() + 54, 180, 23), enemy.label, 13, enemyColor, Qt::AlignCenter);

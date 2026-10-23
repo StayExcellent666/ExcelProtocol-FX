@@ -1,6 +1,7 @@
 #include "raid-battle.hpp"
 
 #include <QGuiApplication>
+#include <QElapsedTimer>
 #include <QImage>
 #include <QJsonArray>
 #include <QPainter>
@@ -25,7 +26,7 @@ int main(int argc, char **argv)
     check(battle.start(8, 100, false), "valid raid starts");
     QJsonObject status = battle.status(100);
     check(status.value("phase").toString() == "fighting", "started raid is fighting");
-    check(status.value("max_hp").toInt() == static_cast<int>(std::floor(1000.0 * std::pow(8.0, 0.7))), "HP follows viewer curve");
+    check(status.value("max_hp").toInt() == static_cast<int>(std::floor(1500.0 * std::pow(8.0, 0.7))), "HP follows the 50-percent-harder viewer curve");
     check(!battle.finish(false, 200), "inactive raid cannot be failed before the deadline");
     check(battle.chat("Coder", "viewer", "", 200) == "invalid_raid_chat", "empty chat is not participation");
     check(battle.chat("Coder", "admin", "hello", 200) == "invalid_raid_role", "unknown role rejected");
@@ -60,6 +61,9 @@ int main(int argc, char **argv)
     check(soundCues.contains("raid-shot-plasma"), "Plasma Rifle has a dedicated sound cue");
     check(battle.chat("BlasterViewer", "viewer", "go", 800) == "attack_queued", "viewer attack accepted");
     check(soundCues.contains("raid-shot-blaster"), "Blaster has a dedicated sound cue");
+    check(battle.chat("BlasterViewer", "viewer", "again", 1200) == "attack_cooldown", "per-viewer attack spam is cooled down");
+    check(battle.chat("OtherViewer", "viewer", "go", 1250) == "attack_queued", "one viewer's cooldown does not block another viewer");
+    check(battle.chat("BlasterViewer", "viewer", "again", 1700) == "attack_queued", "viewer can attack after cooldown");
     battle.onSound = {};
     battle.clear();
 
@@ -99,10 +103,17 @@ int main(int argc, char **argv)
     check(status.value("enemies_defeated").toInt() > 0, "focused enemies visibly die during the simulated raid");
 
     battle.clear();
+    check(battle.start(8, 0, false), "text-command hazard raid starts");
+    check(battle.chat("TextFire", "viewer", "!fire", 100) == "attack_queued", "fire text command accepted");
+    check(battle.chat("TextFire", "viewer", "!ice", 200) == "attack_cooldown", "ice ability remains responsive during shot cooldown");
+    status = battle.status(200);
+    check(status.value("ice_active").toBool() && status.value("firewall_active").toBool(), "text commands activate hazards");
+
+    battle.clear();
     check(battle.start(1, 0, false), "projectile-finish regression raid starts");
     qint64 finishAt = 0;
     for (qint64 now = 50; now <= 90000 && battle.fighting(); now += 50) {
-        if (now % 200 == 0) battle.chat("HammerMod", "mod", "attack", now);
+        if (now % 200 == 0) battle.chat(QString("HammerMod%1").arg((now / 200) % 5), "mod", "attack", now);
         battle.tick(now);
         if (!battle.fighting()) finishAt = now;
     }
@@ -124,6 +135,18 @@ int main(int argc, char **argv)
     for (int y = 0; y < image.height(); y += 8)
         for (int x = 0; x < image.width(); x += 8) maximumAlpha = std::max(maximumAlpha, qAlpha(image.pixel(x, y)));
     check(maximumAlpha > 0, "raid renderer produces a transparent overlay frame");
+
+    QElapsedTimer renderBenchmark;
+    renderBenchmark.start();
+    constexpr int benchmarkFrames = 60;
+    for (int frame = 0; frame < benchmarkFrames; ++frame) {
+        image.fill(Qt::transparent);
+        QPainter framePainter(&image);
+        battle.paint(framePainter, 23000 + frame * 50);
+    }
+    std::cout << "Raid renderer 1080p: "
+              << static_cast<double>(renderBenchmark.nsecsElapsed()) / 1000000.0 / benchmarkFrames
+              << " ms/frame\n";
 
     return failures ? 1 : 0;
 }
